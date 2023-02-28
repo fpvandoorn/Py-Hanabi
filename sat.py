@@ -102,16 +102,16 @@ def solve(deck_str):
     )
 
     constraints = And(*[valid_move(m) for m in range(MAX_MOVES)], win)
-    print('{} variables, {} nodes'.format(len(get_atoms(constraints)), get_formula_size(constraints)))
+    print('Solving instance with {} variables, {} nodes'.format(len(get_atoms(constraints)), get_formula_size(constraints)))
 
     model = get_model(constraints)
     if model:
 #        print_model(model, deck)
-        print(toJSON(model, deck))
-        return True
+        solution = toJSON(model, deck)
+        return True, solution
     else:
         print('unsatisfiable')
-        return False
+        return False, None
         #conj = list(conjunctive_partition(constraints))
         #print('statements: {}'.format(len(conj)))
         #ucore = get_unsat_core(conj)
@@ -177,4 +177,6 @@ def toJSON(model, deck):
             }
     return json.dumps(game)
 
-solve(deck_str)
+solvable, sol = solve(deck_str)
+if solvable:
+    print(sol)
