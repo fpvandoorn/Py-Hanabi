@@ -17,8 +17,8 @@ strikes = {-1: {i: Bool(i == 0) for i in range(0,NUM_STRIKES+1)}, **{m: {0: Bool
 # extraround = {28: {i: Bool(False) for i in range(0, NUM_PLAYERS)}, **{m: {NUM_PLAYERS+1: Bool(False), **{e: Symbol('m{}e{}'.format(m,t) for e in range(0, NUM_PLAYERS+1)}} for m in range(MOVES)} }
 # extraturn[m] = "turn m is a move part of the extra round or a dummy turn"
 extraround = {-1: Bool(False), **{m: Symbol('m{}e'.format(m)) for m in range(0, MOVES)}}
-# dummyturn[m] = "turn m is a dummy turn and not actually part of the game"
-#dummyturn = {-1: Bool(False), **{m: Symbol('m{}e'.format(m)) for m in range(0, MOVES)}}
+# dummyturn[m] = "turn m is a dummy nurn and not actually part of the game"
+dummyturn = {-1: Bool(False), **{m: Symbol('m{}dt'.format(m)) for m in range(0, MOVES)}}
 # strike[m] = "at move m we get a strike"
 strike = {-1: Bool(False), **{m: Symbol('m{}s+'.format(m)) for m in range(MOVES)}}
 # draw[m][i] == "at move m we draw deck[i]"
@@ -47,7 +47,7 @@ def print_model(model):
         print('discard: ' + ', '.join('{} [{}{}]'.format(i, deck[i][0], deck[i][1]) for i in range(50) if model.get_py_value(discard[m][i])))
         for c in colors:
             print('progress {}: '.format(c) + ''.join(str(k) for k in range(1, 6) if model.get_py_value(progress[m][c, k])))
-        flags = ['discard_any', 'draw_any', 'play', 'play5', 'incr_clues', 'strike', 'extraround']
+        flags = ['discard_any', 'draw_any', 'play', 'play5', 'incr_clues', 'strike', 'extraround', 'dummyturn']
         print(', '.join(f for f in flags if model.get_py_value(globals()[f][m])))
 
 def toJSON(model):
@@ -96,6 +96,7 @@ def toJSON(model):
     print(json.dumps(game))
 
 valid_move = lambda m: And(
+    Implies(dummyturn[m], Not(discard_any[m])),
     # definition of discard_any
     Iff(discard_any[m], Or(discard[m][i] for i in range(50))),
     # definition of draw_any
@@ -111,13 +112,13 @@ valid_move = lambda m: And(
     Iff(incr_clues[m], And(discard_any[m], Implies(play[m], And(play5[m], Not(clues[m-1][8]))))),
     #Iff(incr_clues[m], And(discard_any[m], Implies(play[m], play5[m]))),
     # change of clues
-    *[Iff(clues[m][i], Or(clues[m-1][i+1], And(clues[m-1][i], discard_any[m]), And(clues[m-1][i-1], incr_clues[m]))) for i in range(1, 9)],
+    *[Iff(clues[m][i], Or(clues[m-1][i+1], And(clues[m-1][i], Or(discard_any[m], dummyturn[m])), And(clues[m-1][i-1], incr_clues[m]))) for i in range(1, 9)],
     ## more than 8 clues not allowed, discarding produces a strike
     Iff(strike[m], And(discard_any[m], Not(play[m]), clues[m-1][8])),
     # change of strikes
     *[Iff(strikes[m][i], Or(strikes[m-1][i], And(strikes[m-1][i-1], strike[m]))) for i in range(1, NUM_STRIKES+1)],
     # less than 0 clues not allowed
-    Implies(Not(discard_any[m]), clues[m-1][1]),
+    Implies(Not(discard_any[m]), Or(clues[m-1][1], dummyturn[m])),
     # we can only draw card i if the last drawn card was i-1
     *[Implies(draw[m][i], Or(And(draw[m0][i-1], *[Not(draw_any[m1]) for m1 in range(m0+1, m)]) for m0 in range(max(-1, m-9), m))) for i in range(20, 50)],
     #*[Implies(draw[m][i], Not(draw[m0][i])) for m0 in range(m) for i in range(20, 50)],
@@ -141,7 +142,7 @@ valid_move = lambda m: And(
     # extra round bool
     Iff(extraround[m], Or(extraround[m-1], draw[m-1][49])),
     # dummy turn bool
-#    *[Iff(dummyturn[m], dummyturn[m-1]) for i in range(0,1) if m >= 5]
+    *[Iff(dummyturn[m], Or(dummyturn[m-1], draw[m-6][49])) for i in range(0,1) if m >= 5]
 )
 
 win = And(
