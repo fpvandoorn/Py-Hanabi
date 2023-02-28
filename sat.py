@@ -1,7 +1,8 @@
 from pysmt.shortcuts import Symbol, Bool, Not, Implies, Iff, And, Or, AtMostOne, ExactlyOne, get_model, get_atoms, get_formula_size, get_unsat_core
 from pysmt.rewritings import conjunctive_partition
+import json
 
-colors = 'pbryg'
+colors = 'rygbp'
 deck_str = 'p5 p3 b4 r5 y4 y4 y5 r4 b2 y2 y3 g5 g2 g3 g4 p4 r3 b2 b3 b3 p4 b1 p2 b1 b1 p2 p1 p1 g1 r4 g1 r1 r3 r1 g1 r1 p1 b4 p3 g2 g3 g4 b5 y1 y1 y1 r2 r2 y2 y3'
 deck = [(s[0], int(s[1])) for s in deck_str.split(' ')]
 MOVES = 52
@@ -41,6 +42,50 @@ def print_model(model):
             print('progress {}: '.format(c) + ''.join(str(k) for k in range(1, 6) if model.get_py_value(progress[m][c, k])))
         flags = ['discard_any', 'draw_any', 'play', 'play5', 'incr_clues', 'strike']
         print(', '.join(f for f in flags if model.get_py_value(globals()[f][m])))
+
+def toJSON(model):
+    deck_json = [{"suitIndex": colors.index(s), "rank": r} for (s,r) in deck]
+    players = ["Alice", "Bob", "Cathy", "Donald", "Emily"]
+    hands = [deck[4*p:4*(p+1)] for p in range(0,5)]
+    actions = []
+    for m in range(MOVES):
+        if model.get_py_value(discard_any[m]):
+            discarded = next(i for i in range(0,50) if model.get_py_value(discard[m][i]))
+            icard = hands[m % 5].index(deck[discarded])
+            for i in range(icard, 3):
+                hands[m % 5][i] = hands[m % 5][i + 1]
+            if model.get_py_value(draw_any[m]):
+                hands[m % 5][3] = next(deck[i] for i in range(20, 50) if model.get_py_value(draw[m][i]))
+            if model.get_py_value(play[m]) or model.get_py_value(strike[m]):
+                actions.append({
+                    "type": 0,
+                    "target": discarded
+                    })
+            else:
+                actions.append({
+                    "type": 1,
+                    "target": discarded
+                    })
+        else:
+            actions.append({
+                "type": 3,
+                "target": (m + 1) % 5,
+                "value": hands[(m+1) % 5][0][1]
+                })
+    actions.append({
+        "type": 4,
+        "value": 1
+        })
+    game = {
+            "deck": deck_json,
+            "players": players,
+            "actions": actions,
+            "first_player": 0,
+            "options": {
+                "variant": "No Variant"
+                }
+            }
+    print(json.dumps(game))
 
 valid_move = lambda m: And(
     # definition of discard_any
@@ -99,6 +144,7 @@ print('{} variables, {} nodes'.format(len(get_atoms(constraints)), get_formula_s
 model = get_model(constraints)
 if model:
     print_model(model)
+    toJSON(model)
 else:
     print('unsatisfiable')
     #conj = list(conjunctive_partition(constraints))
