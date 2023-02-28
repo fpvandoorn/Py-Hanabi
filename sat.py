@@ -1,7 +1,7 @@
 from pysmt.shortcuts import Symbol, Bool, Not, Implies, Iff, And, Or, AtMostOne, ExactlyOne, get_model, get_atoms, get_formula_size, get_unsat_core
 from pysmt.rewritings import conjunctive_partition
 import json
-MOVES = 60
+MAX_MOVES = 60
 NUM_STRIKES = 3
 NUM_PLAYERS = 5
 
@@ -10,36 +10,36 @@ deck_str = 'p5 p3 b4 r5 y4 y4 y5 r4 b2 y2 y3 g5 g2 g3 g4 p4 r3 b2 b3 b3 p4 b1 p2
 deck = [(s[0], int(s[1])) for s in deck_str.split(' ')]
 
 # clues[m][i] == "after move m we have at least i clues"
-clues = {-1: {i: Bool(i < 9) for i in range(0, 10)}, **{m: {0: Bool(True), 9: Bool(False), **{i: Symbol('m{}c{}'.format(m, i)) for i in range(1, 9)}} for m in range(MOVES)}}
+clues = {-1: {i: Bool(i < 9) for i in range(0, 10)}, **{m: {0: Bool(True), 9: Bool(False), **{i: Symbol('m{}c{}'.format(m, i)) for i in range(1, 9)}} for m in range(MAX_MOVES)}}
 # strikes[m][i] == "after move m we have at least i strikes"
-strikes = {-1: {i: Bool(i == 0) for i in range(0,NUM_STRIKES+1)}, **{m: {0: Bool(True), NUM_STRIKES: Bool(False), **{s: Symbol('m{}s{}'.format(m,s)) for s in range(1,NUM_STRIKES)}} for m in range(MOVES)} }
+strikes = {-1: {i: Bool(i == 0) for i in range(0,NUM_STRIKES+1)}, **{m: {0: Bool(True), NUM_STRIKES: Bool(False), **{s: Symbol('m{}s{}'.format(m,s)) for s in range(1,NUM_STRIKES)}} for m in range(MAX_MOVES)} }
 # extraround[m][i] == "after move m, the extraround has started and at least i turns of it have taken place"
-# extraround = {28: {i: Bool(False) for i in range(0, NUM_PLAYERS)}, **{m: {NUM_PLAYERS+1: Bool(False), **{e: Symbol('m{}e{}'.format(m,t) for e in range(0, NUM_PLAYERS+1)}} for m in range(MOVES)} }
+# extraround = {28: {i: Bool(False) for i in range(0, NUM_PLAYERS)}, **{m: {NUM_PLAYERS+1: Bool(False), **{e: Symbol('m{}e{}'.format(m,t) for e in range(0, NUM_PLAYERS+1)}} for m in range(MAX_MOVES)} }
 # extraturn[m] = "turn m is a move part of the extra round or a dummy turn"
-extraround = {-1: Bool(False), **{m: Symbol('m{}e'.format(m)) for m in range(0, MOVES)}}
+extraround = {-1: Bool(False), **{m: Symbol('m{}e'.format(m)) for m in range(0, MAX_MOVES)}}
 # dummyturn[m] = "turn m is a dummy nurn and not actually part of the game"
-dummyturn = {-1: Bool(False), **{m: Symbol('m{}dt'.format(m)) for m in range(0, MOVES)}}
+dummyturn = {-1: Bool(False), **{m: Symbol('m{}dt'.format(m)) for m in range(0, MAX_MOVES)}}
 # strike[m] = "at move m we get a strike"
-strike = {-1: Bool(False), **{m: Symbol('m{}s+'.format(m)) for m in range(MOVES)}}
+strike = {-1: Bool(False), **{m: Symbol('m{}s+'.format(m)) for m in range(MAX_MOVES)}}
 # draw[m][i] == "at move m we draw deck[i]"
-draw = {-1: {i: Bool(i == 19) for i in range(19, 50)}, **{m: {19: Bool(False), **{i: Symbol('m{}+{}'.format(m, i)) for i in range(20, 50)}} for m in range(MOVES)}}
+draw = {-1: {i: Bool(i == 19) for i in range(19, 50)}, **{m: {19: Bool(False), **{i: Symbol('m{}+{}'.format(m, i)) for i in range(20, 50)}} for m in range(MAX_MOVES)}}
 # draw[m][i] == "at move m we play/discard deck[i]"
-discard = {m: {i: Symbol('m{}-{}'.format(m, i)) for i in range(50)} for m in range(MOVES)}
+discard = {m: {i: Symbol('m{}-{}'.format(m, i)) for i in range(50)} for m in range(MAX_MOVES)}
 # progress[m][c, k] == "after move m we have played in color c until k"
-progress = {-1: {(c, k): Bool(k == 0) for c in colors for k in range(6)}, **{m: {**{(c, 0): Bool(True) for c in colors}, **{(c, k): Symbol('m{}:{}{}'.format(m, c, k)) for c in colors for k in range(1, 6)}} for m in range(MOVES)}}
+progress = {-1: {(c, k): Bool(k == 0) for c in colors for k in range(6)}, **{m: {**{(c, 0): Bool(True) for c in colors}, **{(c, k): Symbol('m{}:{}{}'.format(m, c, k)) for c in colors for k in range(1, 6)}} for m in range(MAX_MOVES)}}
 # discard_any[m] == "at move m we play/discard a card"
-discard_any = {m: Symbol('m{}d'.format(m)) for m in range(MOVES)}
+discard_any = {m: Symbol('m{}d'.format(m)) for m in range(MAX_MOVES)}
 # draw_any[m] == "at move m we draw a card"
-draw_any = {m: Symbol('m{}D'.format(m)) for m in range(MOVES)}
+draw_any = {m: Symbol('m{}D'.format(m)) for m in range(MAX_MOVES)}
 # play[m] == "at move m we play a card"
-play = {m: Symbol('m{}p'.format(m)) for m in range(MOVES)}
+play = {m: Symbol('m{}p'.format(m)) for m in range(MAX_MOVES)}
 # play5[m] == "at move m we play a 5"
-play5 = {m: Symbol('m{}p5'.format(m)) for m in range(MOVES)}
+play5 = {m: Symbol('m{}p5'.format(m)) for m in range(MAX_MOVES)}
 # incr_clues[m] == "at move m we obtain a clue"
-incr_clues = {m: Symbol('m{}c+'.format(m)) for m in range(MOVES)}
+incr_clues = {m: Symbol('m{}c+'.format(m)) for m in range(MAX_MOVES)}
 
 def print_model(model):
-    for m in range(MOVES):
+    for m in range(MAX_MOVES):
         print('=== move {} ==='.format(m))
         print('clues: ' + ''.join(str(i) for i in range(1, 9) if model.get_py_value(clues[m][i])))
         print('strikes: ' + ''.join(str(i) for i in range(1, NUM_STRIKES) if model.get_py_value(strikes[m][i])))
@@ -55,7 +55,7 @@ def toJSON(model):
     players = ["Alice", "Bob", "Cathy", "Donald", "Emily"]
     hands = [deck[4*p:4*(p+1)] for p in range(0,5)]
     actions = []
-    for m in range(MOVES):
+    for m in range(MAX_MOVES):
         if model.get_py_value(dummyturn[m]):
             break
         if model.get_py_value(discard_any[m]):
@@ -148,12 +148,12 @@ valid_move = lambda m: And(
 
 win = And(
     # maximum progress at each color
-    *[progress[MOVES-1][c, 5] for c in colors],
+    *[progress[MAX_MOVES-1][c, 5] for c in colors],
     # played every color/value combination (NOTE: redundant)
-    *[Or(And(discard[m][i], play[m]) for m in range(MOVES) for i in range(50) if deck[i] == (c, k)) for c in colors for k in range(1, 6)]
+    *[Or(And(discard[m][i], play[m]) for m in range(MAX_MOVES) for i in range(50) if deck[i] == (c, k)) for c in colors for k in range(1, 6)]
 )
 
-constraints = And(*[valid_move(m) for m in range(MOVES)], win)
+constraints = And(*[valid_move(m) for m in range(MAX_MOVES)], win)
 print('{} variables, {} nodes'.format(len(get_atoms(constraints)), get_formula_size(constraints)))
 
 model = get_model(constraints)
