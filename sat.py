@@ -5,9 +5,14 @@ colors = 'pbryg'
 deck_str = 'p5 p3 b4 r5 y4 y4 y5 r4 b2 y2 y3 g5 g2 g3 g4 p4 r3 b2 b3 b3 p4 b1 p2 b1 b1 p2 p1 p1 g1 r4 g1 r1 r3 r1 g1 r1 p1 b4 p3 g2 g3 g4 b5 y1 y1 y1 r2 r2 y2 y3'
 deck = [(s[0], int(s[1])) for s in deck_str.split(' ')]
 MOVES = 52
+NUM_STRIKES = 3
 
 # clues[m][i] == "after move m we have at least i clues"
 clues = {-1: {i: Bool(i < 9) for i in range(0, 10)}, **{m: {0: Bool(True), 9: Bool(False), **{i: Symbol('m{}c{}'.format(m, i)) for i in range(1, 9)}} for m in range(MOVES)}}
+# strikes[m][i] == "after move m we have at least i strikes"
+strikes = {-1: {i: Bool(i == 0) for i in range(0,NUM_STRIKES+1)}, **{m: {0: Bool(True), NUM_STRIKES: Bool(False), **{s: Symbol('m{}s{}'.format(m,s)) for s in range(1,NUM_STRIKES)}} for m in range(MOVES)} }
+# strike[m] = "at move m we get a strike"
+strike = {-1: Bool(False), **{m: Symbol('m{}s+'.format(m)) for m in range(MOVES)}}
 # draw[m][i] == "at move m we draw deck[i]"
 draw = {-1: {i: Bool(i == 19) for i in range(19, 50)}, **{m: {19: Bool(False), **{i: Symbol('m{}+{}'.format(m, i)) for i in range(20, 50)}} for m in range(MOVES)}}
 # draw[m][i] == "at move m we play/discard deck[i]"
@@ -29,11 +34,12 @@ def print_model(model):
     for m in range(MOVES):
         print('=== move {} ==='.format(m))
         print('clues: ' + ''.join(str(i) for i in range(1, 9) if model.get_py_value(clues[m][i])))
+        print('strikes: ' + ''.join(str(i) for i in range(1, NUM_STRIKES) if model.get_py_value(strikes[m][i])))
         print('draw: ' + ', '.join('{} [{}{}]'.format(i, deck[i][0], deck[i][1]) for i in range(20, 50) if model.get_py_value(draw[m][i])))
         print('discard: ' + ', '.join('{} [{}{}]'.format(i, deck[i][0], deck[i][1]) for i in range(50) if model.get_py_value(discard[m][i])))
         for c in colors:
             print('progress {}: '.format(c) + ''.join(str(k) for k in range(1, 6) if model.get_py_value(progress[m][c, k])))
-        flags = ['discard_any', 'draw_any', 'play', 'play5', 'incr_clues']
+        flags = ['discard_any', 'draw_any', 'play', 'play5', 'incr_clues', 'strike']
         print(', '.join(f for f in flags if model.get_py_value(globals()[f][m])))
 
 valid_move = lambda m: And(
@@ -53,7 +59,9 @@ valid_move = lambda m: And(
     # change of clues
     *[Iff(clues[m][i], Or(clues[m-1][i+1], And(clues[m-1][i], discard_any[m]), And(clues[m-1][i-1], incr_clues[m]))) for i in range(1, 9)],
     ## more than 8 clues not allowed (TODO: not really. 2x we can deliberately play unplayable card to discard it)
-    #Implies(incr_clues[m], Not(clues[m-1][8])),
+    Iff(strike[m], And(discard_any[m], Not(play[m]), clues[m-1][8])),
+    # change of strikes
+    *[Iff(strikes[m][i], Or(strikes[m-1][i], And(strikes[m-1][i-1], strike[m]))) for i in range(1, NUM_STRIKES+1)],
     # less than 0 clues not allowed
     Implies(Not(discard_any[m]), clues[m-1][1]),
     # we can only draw card i if the last drawn card was i-1
