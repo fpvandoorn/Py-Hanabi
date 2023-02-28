@@ -56,6 +56,8 @@ def toJSON(model):
     hands = [deck[4*p:4*(p+1)] for p in range(0,5)]
     actions = []
     for m in range(MOVES):
+        if model.get_py_value(dummyturn[m]):
+            break
         if model.get_py_value(discard_any[m]):
             discarded = next(i for i in range(0,50) if model.get_py_value(discard[m][i]))
             icard = hands[m % 5].index(deck[discarded])
@@ -90,7 +92,6 @@ def toJSON(model):
             "first_player": 0,
             "options": {
                 "variant": "No Variant",
-                "allOrNothing": True
                 }
             }
     print(json.dumps(game))
