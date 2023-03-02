@@ -7,6 +7,11 @@ BASE62 = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 COLORS = 'rygbp'
 
 
+## Helper method, iterate over chunks of length n in a string
+def chunks(s: str, n: int):
+    for i in range(0, len(s), n):
+        yield s[i:i+n]
+
 
 class DeckCard():
     def __init__(self, suitIndex: int, rank: int):
@@ -33,6 +38,18 @@ class Action():
         self.target = target
         self.value = value
 
+    def __repr__(self):
+        match self.type:
+            case ActionType.Play:
+                return "Play card {}".format(self.target)
+            case ActionType.Discard:
+                return "Discard card {}".format(self.target)
+            case ActionType.ColorClue:
+                return "Clue color {} to player {}".format(self.value, self.target)
+            case ActionType.ColorClue:
+                return "Clue rank {} to player {}".format(self.value, self.target)
+            case ActionType.EndGame:
+                return "Player {} ends the game (code {})".format(self.target, self.value)
 
 def compress_actions(actions: List[Action]) -> str:
     minType = 0
@@ -49,6 +66,23 @@ def compress_actions(actions: List[Action]) -> str:
     out = str(minType) + str(maxType)
     out += ''.join(map(compress_action, actions))
     return out
+
+def decompress_actions(actions_str: str) -> List[Action]:
+    try:
+        minType = int(actions_str[0])
+        maxType = int(actions_str[1])
+    except ValueError:
+        raise ValueError("invalid action string")
+    assert(maxType >= minType)
+    typeRange = maxType - minType + 1
+    def decompress_action(action):
+        actionType = ActionType(BASE62.index(action[0]) % typeRange)
+        value = None
+        if actionType not in [actionType.Play, actionType.Discard]:
+            value = BASE62.index(action[0]) // typeRange
+        target = BASE62.index(action[1])
+        return Action(actionType, target, value)
+    return [decompress_action(a) for a in chunks(actions_str[2:], 2)]
 
 
 def compress_deck(deck: List[DeckCard]) -> str:
@@ -85,7 +119,12 @@ c = compress_deck(deck)
 l = decompress_deck(c)
 print(deck, l)
 
-
 f = [Action(ActionType.Discard, 2), Action(ActionType.Play, 3, 8)]
 a = compress_actions(f)
+x = decompress_actions(a)
 print(a)
+print(x)
+
+c = '15ywseiijdqgholmnxcqrrxpvppvuukdkacakauswlmntfffbbgh'
+l = decompress_deck(c)
+print(l)
