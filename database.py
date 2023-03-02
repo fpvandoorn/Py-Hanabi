@@ -12,27 +12,51 @@ cur = conn.cursor()
 # exit(0)
 
 ## check if table exists, else create it
-cur.execute("SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'games');")
-a = cur.fetchone()
 
-if a[0] is False:
-    print("creating table")
-    cur.execute(
-            "CREATE TABLE games ("
-                "id             SERIAL PRIMARY KEY,"
-                "num_players    SMALLINT NOT NULL,"
-                "score          SMALLINT NOT NULL,"
-                "seed           TEXT     NOT NULL,"
-                "variant_id     SMALLINT NOT NULL,"
-                "deck_plays     BOOLEAN,"
-                "one_extra_card BOOLEAN,"
-                "one_less_card  BOOLEAN,"
-                "all_or_nothing BOOLEAN,"
-                "num_turns      SMALLINT"
-            ");")
-    conn.commit()
-else:
-    print("table already exists")
+def create_games_table():
+    tablename = "games"
+    cur.execute("SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = '{}');".format(tablename))
+    a = cur.fetchone()
+
+    if a[0] is False:
+        print("Creating table '{}'".format(tablename))
+        cur.execute(
+                "CREATE TABLE {} ("
+                    "id             INT      PRIMARY KEY,"
+                    "num_players    SMALLINT NOT NULL,"
+                    "score          SMALLINT NOT NULL,"
+                    "seed           TEXT     NOT NULL,"
+                    "variant_id     SMALLINT NOT NULL,"
+                    "deck_plays     BOOLEAN,"
+                    "one_extra_card BOOLEAN,"
+                    "one_less_card  BOOLEAN,"
+                    "all_or_nothing BOOLEAN,"
+                    "num_turns      SMALLINT"
+                ");".format(tablename))
+        conn.commit()
+#    else:
+    #    print("table already exists")
+
+def create_seeds_table():
+    tablename = 'seeds'
+    cur.execute("SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = '{}');".format(tablename))
+    a = cur.fetchone()
+
+    if a[0] is False:
+        print("Creating table '{}'".format(tablename))
+        cur.execute(
+                "CREATE TABLE {} ("
+                    "seed                    TEXT NOT NULL PRIMARY KEY,"
+                    "num_players             SMALLINT NOT NULL,"
+                    "variant_id              SMALLINT NOT NULL,"
+                    "feasible                BOOLEAN," # theoretical solvability
+                    "max_score_theoretical   SMALLINT" # if infeasible, max score
+                ");".format(tablename))
+        conn.commit()
+
+create_games_table()
+create_seeds_table()
+
 
 
 class Game():
