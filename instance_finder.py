@@ -1,0 +1,95 @@
+import requests
+import requests_cache
+import json
+from sat import COLORS, solve
+
+session = requests_cache.CachedSession('hanab.live')
+
+def get(url):
+    print("sending request for " + url)
+    response =  session.get("https://hanab.live/" + url)
+    if not response.status_code == 200:
+        return None
+    if "application/json" in response.headers['content-type']:
+        return json.loads(response.text)
+
+def api(url):
+    link = "api/v1/" + url
+    if "?" in url:
+        link += "&"
+    else:
+        link += "?"
+    link += "size=100"
+    return get(link)
+
+#r = api("variants/0")
+#print(json.dumps(r, indent=4))
+
+def replay(seed):
+    r = api("seed/" + str(seed))
+    try:
+        game_id = r['rows'][0]['id']
+    except TypeError:
+        return None
+    return get("export/" + str(game_id))
+
+
+def known_solvable(seed):
+    link = "seed/" + seed
+    r = api(link)
+    rows = r['rows']
+    if not rows:
+        print("invalid response to seed {}".format(seed))
+        return False
+    for row in rows:
+        if row["score"] == 25:
+            return True, row["id"]
+    for i in range(1, (r['total_rows'] + 99) // 100):
+        page = api(link + "?page=" + str(i))
+        rows = page['rows']
+        for row in rows:
+            if row["score"] == 25:
+                return True, row["id"]
+#    print("No solution found in database for seed {}".format(seed))
+    return False
+
+
+def solvable(replay):
+    deck = replay["deck"]
+    deck_str = " ".join(COLORS[c["suitIndex"]] + str(c["rank"]) for c in deck)
+    return solve(deck_str, len(replay["players"]))
+
+
+seeds = {2: [], 3: [], 4: [], 5: [], 6: []}
+num_games = 0
+for i in range(0,1000):
+    r = api("variants/0?page=" + str(i))
+    for row in r['rows']:
+        num_games += 1
+        if row['seed'] not in seeds[row['num_players']]:
+            seeds[row['num_players']].append(row['seed'])
+#                print('found new non-max-game in 5p: ' + row['seed'])
+print('looked at {} games'.format(num_games))
+for i in range(2,7):
+    print("Found {} seeds in {}-player in database".format(len(seeds[i]), i))
+
+hard_seeds = []
+for seed in seeds[3]:
+    if not known_solvable(seed):
+#        print("seed {} has no solve in online database".format(seed))
+        hard_seeds.append(seed)
+print("Found {} seeds with no solve in database, attacking each with SAT solver"
+      .format(len(hard_seeds)))
+
+for seed in hard_seeds:
+    r = replay(seed)
+    if not r:
+        continue
+    s, sol = solvable(r)
+    if s:
+        print("Seed {} was found to be solvable".format(seed))
+        print(sol)
+    else:
+        print("==============================")
+        print("Found non-solvable seed {}", seed)
+        print("==============================")
