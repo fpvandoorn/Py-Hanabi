@@ -1,0 +1,6 @@
+# cache for requests to hanab.live
+hanab.live
+# python venv
+venv/
+# pycache dir
+__pycache__
