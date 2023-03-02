@@ -3,12 +3,12 @@ from enum import Enum
 from typing import List, Optional
 import more_itertools
 
-BASE62 = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
+BASE62 = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 COLORS = 'rygbp'
 
 
-
+# Some setup for conversion between variant id and name
 with open("variants.json", 'r') as f:
     VARIANTS = json.loads(f.read())
 
@@ -18,10 +18,12 @@ def variant_id(variant_name):
 def variant_name(variant_id):
     return next(var['name'] for var in VARIANTS if var['id'] == variant_id)
 
-## Helper method, iterate over chunks of length n in a string
+
+# Helper method, iterate over chunks of length n in a string
 def chunks(s: str, n: int):
     for i in range(0, len(s), n):
         yield s[i:i+n]
+
 
 class DeckCard():
     def __init__(self, suitIndex: int, rank: int):
@@ -45,6 +47,7 @@ class ActionType(Enum):
     ColorClue = 2
     RankClue = 3
     EndGame = 4
+
 
 class Action():
     def __init__(self, type_: ActionType, target: int, value: Optional[int] = None):
@@ -75,6 +78,7 @@ class Action():
                 return "Player {} ends the game (code {})".format(self.target, self.value)
         return "Undefined"
 
+
 def compress_actions(actions: List[Action]) -> str:
     minType = 0
     maxType = 0
@@ -91,6 +95,7 @@ def compress_actions(actions: List[Action]) -> str:
     out = str(minType) + str(maxType)
     out += ''.join(map(compress_action, actions))
     return out
+
 
 def decompress_actions(actions_str: str) -> List[Action]:
     try:
@@ -172,6 +177,7 @@ def compressJSONGame(game_json: dict) -> str:
     variant = game_json.get("variant", "No Variant")
     out += str(variant_id(variant))
     return ''.join(more_itertools.intersperse("-", out, 20))
+
 
 def decompressJSONGame(game_str: str)->dict:
     game = {}
