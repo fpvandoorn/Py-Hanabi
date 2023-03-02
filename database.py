@@ -80,7 +80,7 @@ def load(game_id: int) -> Optional[Game]:
 def store(game: Game):
     stored = load(game.id)
     if stored is None:
-        print("inserting game with id {} into DB".format(game.id))
+#        print("inserting game with id {} into DB".format(game.id))
         cur.execute(
                 "INSERT INTO games"
                 "(id, num_players, score, seed, variant_id)"
