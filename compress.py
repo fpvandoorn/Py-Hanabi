@@ -1,10 +1,19 @@
 import json
 from enum import Enum
 from typing import List, Optional
+import more_itertools
 
 BASE62 = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 COLORS = 'rygbp'
+
+
+
+with open("variants.json", 'r') as f:
+    VARIANTS = json.loads(f.read())
+
+def variant_id(variant):
+    return next(var['id'] for var in VARIANTS if var['name'] == variant)
 
 
 ## Helper method, iterate over chunks of length n in a string
@@ -12,11 +21,14 @@ def chunks(s: str, n: int):
     for i in range(0, len(s), n):
         yield s[i:i+n]
 
-
 class DeckCard():
     def __init__(self, suitIndex: int, rank: int):
         self.suitIndex: int = suitIndex
         self.rank: int = rank
+
+    @staticmethod
+    def from_json(deck_card):
+        return DeckCard(**deck_card)
 
     def __eq__(self, other):
         return self.suitIndex == other.suitIndex and self.rank == other.rank
@@ -38,6 +50,15 @@ class Action():
         self.target = target
         self.value = value
 
+    @staticmethod
+    def from_json(action):
+        print("Converting {} to an action".format(action))
+        return Action(
+                ActionType(action['type']),
+                int(action['target']),
+                action.get('value', None)
+                )
+
     def __repr__(self):
         match self.type:
             case ActionType.Play:
@@ -50,10 +71,12 @@ class Action():
                 return "Clue rank {} to player {}".format(self.value, self.target)
             case ActionType.EndGame:
                 return "Player {} ends the game (code {})".format(self.target, self.value)
+        return "Undefined"
 
 def compress_actions(actions: List[Action]) -> str:
     minType = 0
     maxType = 0
+    print(actions)
     if len(actions) != 0:
         minType = min(map(lambda a: a.type.value, actions))
         maxType = max(map(lambda a: a.type.value, actions))
@@ -72,8 +95,10 @@ def decompress_actions(actions_str: str) -> List[Action]:
         minType = int(actions_str[0])
         maxType = int(actions_str[1])
     except ValueError:
-        raise ValueError("invalid action string")
+        raise ValueError("invalid action string: invalid min/max range")
     assert(maxType >= minType)
+    if not len(actions_str) % 2 == 0:
+            raise ValueError("Invalid length of action str")
     typeRange = maxType - minType + 1
     def decompress_action(action):
         actionType = ActionType(BASE62.index(action[0]) % typeRange)
@@ -111,6 +136,40 @@ def decompress_deck(deck_str: str) -> List[DeckCard]:
     return [decompress_card(c) for c in deck_str[2:]]
 
 
+def compressJSONGame(game_json: dict) -> str:
+    out = ""
+    num_players = len(game_json.get('players', []))
+    num_players = game_json.get('num_players', num_players)
+    if not 2 <= num_players:
+        raise ValueError("Invalid JSON game: could not parse num players")
+    out = "{}".format(num_players)
+    try:
+        deck = game_json['deck']
+    except:
+        raise KeyError("JSON game contains no deck")
+    assert(len(deck) > 0)
+    if type(deck[0]) != DeckCard:
+        try:
+            deck = [DeckCard.from_json(card) for card in deck]
+        except:
+            raise ValueError("invalid jSON format: could not convert to deck cards")
+    # now, deck is in the correct form
+    out += compress_deck(deck)
+    out += ","   # first part finished
+    actions = game_json.get('actions', [])
+    if len(actions) == 0:
+        print("WARNING: action array is empty")
+    else:
+        if type(actions[0]) != Action:
+            try:
+                actions = [Action.from_json(action) for action in actions]
+            except:
+                raise ValueError("invalid JSON format: could not convert to actions")
+    out += compress_actions(actions)
+    out += ","
+    variant = game_json.get("variant", "No Variant")
+    out += str(variant_id(variant))
+    return ''.join(more_itertools.intersperse("-", out, 20))
 
 ## test
 
@@ -128,3 +187,11 @@ print(x)
 c = '15ywseiijdqgholmnxcqrrxpvppvuukdkacakauswlmntfffbbgh'
 l = decompress_deck(c)
 print(l)
+
+
+game = {"deck": [{"rank": 5, "suitIndex": 4}, {"rank": 3, "suitIndex": 4}, {"rank": 4, "suitIndex": 3}, {"rank": 5, "suitIndex": 0}, {"rank": 4, "suitIndex": 1}, {"rank": 4, "suitIndex": 1}, {"rank": 5, "suitIndex": 1}, {"rank": 4, "suitIndex": 0}, {"rank": 2, "suitIndex": 3}, {"rank": 2, "suitIndex": 1}, {"rank": 3, "suitIndex": 1}, {"rank": 5, "suitIndex": 2}, {"rank": 2, "suitIndex": 2}, {"rank": 3, "suitIndex": 2}, {"rank": 4, "suitIndex": 2}, {"rank": 4, "suitIndex": 4}, {"rank": 3, "suitIndex": 0}, {"rank": 2, "suitIndex": 3}, {"rank": 3, "suitIndex": 3}, {"rank": 3, "suitIndex": 3}, {"rank": 4, "suitIndex": 4}, {"rank": 1, "suitIndex": 3}, {"rank": 2, "suitIndex": 4}, {"rank": 1, "suitIndex": 3}, {"rank": 1, "suitIndex": 3}, {"rank": 2, "suitIndex": 4}, {"rank": 1, "suitIndex": 4}, {"rank": 1, "suitIndex": 4}, {"rank": 1, "suitIndex": 2}, {"rank": 4, "suitIndex": 0}, {"rank": 1, "suitIndex": 2}, {"rank": 1, "suitIndex": 0}, {"rank": 3, "suitIndex": 0}, {"rank": 1, "suitIndex": 0}, {"rank": 1, "suitIndex": 2}, {"rank": 1, "suitIndex": 0}, {"rank": 1, "suitIndex": 4}, {"rank": 4, "suitIndex": 3}, {"rank": 3, "suitIndex": 4}, {"rank": 2, "suitIndex": 2}, {"rank": 3, "suitIndex": 2}, {"rank": 4, "suitIndex": 2}, {"rank": 5, "suitIndex": 3}, {"rank": 1, "suitIndex": 1}, {"rank": 1, "suitIndex": 1}, {"rank": 1, "suitIndex": 1}, {"rank": 2, "suitIndex": 0}, {"rank": 2, "suitIndex": 0}, {"rank": 2, "suitIndex": 1}, {"rank": 3, "suitIndex": 1}], "first_player": 0, "options": {"variant": "No Variant"}, "players": ["Alice", "Bob", "Cathy", "Donald", "Emily"], "actions": [{"type": 4, "target": 0, "value": 4}]}
+
+print("STARTING TEST")
+c = compressJSONGame(game)
+print(c)
+print("hanab.live/shared-replay-json/" + c)
