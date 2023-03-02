@@ -2,10 +2,10 @@ from pysmt.shortcuts import Symbol, Bool, Not, Implies, Iff, And, Or, AtMostOne,
 from pysmt.rewritings import conjunctive_partition
 import json
 
-MAX_MOVES = 56
+MAX_MOVES = 63
 NUM_STRIKES = 3
-NUM_PLAYERS = 5
 COLORS = 'rygbp'
+NUM_CARDS = 50
 
 deck_str = 'p5 p3 b4 r5 y4 y4 y5 r4 b2 y2 y3 g5 g2 g3 g4 p4 r3 b2 b3 b3 p4 b1 p2 b1 b1 p2 p1 p1 g1 r4 g1 r1 r3 r1 g1 r1 p1 b4 p3 g2 g3 g4 b5 y1 y1 y1 r2 r2 y2 y3'
 
@@ -15,18 +15,14 @@ deck_str = 'p5 p3 b4 r5 y4 y4 y5 r4 b2 y2 y3 g5 g2 g3 g4 p4 r3 b2 b3 b3 p4 b1 p2
 clues = {-1: {i: Bool(i < 9) for i in range(0, 10)}, **{m: {0: Bool(True), 9: Bool(False), **{i: Symbol('m{}c{}'.format(m, i)) for i in range(1, 9)}} for m in range(MAX_MOVES)}}
 # strikes[m][i] == "after move m we have at least i strikes"
 strikes = {-1: {i: Bool(i == 0) for i in range(0,NUM_STRIKES+1)}, **{m: {0: Bool(True), NUM_STRIKES: Bool(False), **{s: Symbol('m{}s{}'.format(m,s)) for s in range(1,NUM_STRIKES)}} for m in range(MAX_MOVES)} }
-# extraround[m][i] == "after move m, the extraround has started and at least i turns of it have taken place"
-# extraround = {28: {i: Bool(False) for i in range(0, NUM_PLAYERS)}, **{m: {NUM_PLAYERS+1: Bool(False), **{e: Symbol('m{}e{}'.format(m,t) for e in range(0, NUM_PLAYERS+1)}} for m in range(MAX_MOVES)} }
 # extraturn[m] = "turn m is a move part of the extra round or a dummy turn"
-extraround = {-1: Bool(False), **{m: Symbol('m{}e'.format(m)) for m in range(0, MAX_MOVES)}}
+extraround = {-1: Bool(False), **{m: Bool(False) if m <= 29 else Symbol('m{}e'.format(m)) for m in range(0, MAX_MOVES)}}
 # dummyturn[m] = "turn m is a dummy nurn and not actually part of the game"
-dummyturn = {-1: Bool(False), **{m: Symbol('m{}dt'.format(m)) for m in range(0, MAX_MOVES)}}
+dummyturn = {-1: Bool(False), **{m: Bool(False) if m <= 34 else Symbol('m{}dt'.format(m)) for m in range(0, MAX_MOVES)}}
 # strike[m] = "at move m we get a strike"
 strike = {-1: Bool(False), **{m: Symbol('m{}s+'.format(m)) for m in range(MAX_MOVES)}}
-# draw[m][i] == "at move m we draw deck[i]"
-draw = {-1: {i: Bool(i == 19) for i in range(19, 50)}, **{m: {19: Bool(False), **{i: Symbol('m{}+{}'.format(m, i)) for i in range(20, 50)}} for m in range(MAX_MOVES)}}
 # draw[m][i] == "at move m we play/discard deck[i]"
-discard = {m: {i: Symbol('m{}-{}'.format(m, i)) for i in range(50)} for m in range(MAX_MOVES)}
+discard = {m: {i: Symbol('m{}-{}'.format(m, i)) for i in range(NUM_CARDS)} for m in range(MAX_MOVES)}
 # progress[m][c, k] == "after move m we have played in color c until k"
 progress = {-1: {(c, k): Bool(k == 0) for c in COLORS for k in range(6)}, **{m: {**{(c, 0): Bool(True) for c in COLORS}, **{(c, k): Symbol('m{}:{}{}'.format(m, c, k)) for c in COLORS for k in range(1, 6)}} for m in range(MAX_MOVES)}}
 # discard_any[m] == "at move m we play/discard a card"
@@ -40,23 +36,35 @@ play5 = {m: Symbol('m{}p5'.format(m)) for m in range(MAX_MOVES)}
 # incr_clues[m] == "at move m we obtain a clue"
 incr_clues = {m: Symbol('m{}c+'.format(m)) for m in range(MAX_MOVES)}
 
+### this is dependent on the number of players
+# draw[m][i] == "at move m we draw deck[i]"
 
-def solve(deck_str):
+hand_size = {2: 5, 3: 5, 4: 4, 5: 4, 6: 3}
+last_hand_card = {2: 9, 3: 14, 4: 15, 5: 19, 6: 17}
+max_moves = {2: -1, 3: 63, 4: 63, 5: 56, 6: 62}
+draw = {p: {-1: {i: Bool(i == last_hand_card[p]) for i in range(last_hand_card[p], NUM_CARDS)}, **{m: {last_hand_card[p]: Bool(False), **{i: Symbol('m{}+{}'.format(m, i)) for i in range(last_hand_card[p] + 1, NUM_CARDS)}} for m in range(max_moves[p])}} for p in range(2,7)}
+
+
+def solve(deck_str, num_players=5):
     deck = [(s[0], int(s[1])) for s in deck_str.split(' ')]
+    hand_size = globals()['hand_size'][num_players]
+    last_hand_card = globals()['last_hand_card'][num_players]
+    max_moves = globals()['max_moves'][num_players]
+    draw = globals()['draw'][num_players]
 
     valid_move = lambda m: And(
         Implies(dummyturn[m], Not(discard_any[m])),
         # definition of discard_any
-        Iff(discard_any[m], Or(discard[m][i] for i in range(50))),
+        Iff(discard_any[m], Or(discard[m][i] for i in range(NUM_CARDS))),
         # definition of draw_any
-        Iff(draw_any[m], Or(draw[m][i] for i in range(20, 50))),
+        Iff(draw_any[m], Or(draw[m][i] for i in range(last_hand_card + 1, NUM_CARDS))),
         # draw implies discard (and converse true before last 5 moves)
         Implies(draw_any[m], discard_any[m]),
         Implies(discard_any[m], Or(extraround[m], draw_any[m])),
         # play requires discard
         Implies(play[m], discard_any[m]),
         # definition of play5
-        Iff(play5[m], And(play[m], Or(discard[m][i] for i in range(50) if deck[i][1] == 5))),
+        Iff(play5[m], And(play[m], Or(discard[m][i] for i in range(NUM_CARDS) if deck[i][1] == 5))),
         # definition of incr_clues
         Iff(incr_clues[m], And(discard_any[m], Implies(play[m], And(play5[m], Not(clues[m-1][8]))))),
         #Iff(incr_clues[m], And(discard_any[m], Implies(play[m], play5[m]))),
@@ -69,45 +77,45 @@ def solve(deck_str):
         # less than 0 clues not allowed
         Implies(Not(discard_any[m]), Or(clues[m-1][1], dummyturn[m])),
         # we can only draw card i if the last drawn card was i-1
-        *[Implies(draw[m][i], Or(And(draw[m0][i-1], *[Not(draw_any[m1]) for m1 in range(m0+1, m)]) for m0 in range(max(-1, m-9), m))) for i in range(20, 50)],
+        *[Implies(draw[m][i], Or(And(draw[m0][i-1], *[Not(draw_any[m1]) for m1 in range(m0+1, m)]) for m0 in range(max(-1, m-9), m))) for i in range(last_hand_card + 1, NUM_CARDS)],
         #*[Implies(draw[m][i], Not(draw[m0][i])) for m0 in range(m) for i in range(20, 50)],
         #*[Implies(draw[m][i], Or(draw[m0][i-1] for m0 in range(max(-1, m-9), m))) for i in range(20, 50)],
         # we can only draw at most one card (NOTE: redundant, FIXME: avoid quadratic formula)
-        AtMostOne(draw[m][i] for i in range(20, 50)),
+        AtMostOne(draw[m][i] for i in range(last_hand_card + 1, NUM_CARDS)),
         #*[Not(And(draw[m][i], draw[m][j])) for i in range(20, 50) for j in range(20, i)],
         # we can only discard a card if we drew it earlier...
-        *[Implies(discard[m][i], Or(draw[m0][i] for m0 in range(m-5, -1, -5))) for i in range(20, 50)],
+        *[Implies(discard[m][i], Or(draw[m0][i] for m0 in range(m-num_players, -1, -num_players))) for i in range(last_hand_card + 1, NUM_CARDS)],
         # ...or if it was part of the initial hand
-        *[Not(discard[m][i]) for i in range(20) if i//4 != m%5],
+        *[Not(discard[m][i]) for i in range(last_hand_card + 1) if i//hand_size != m % num_players],
         # we can only discard a card if we did not discard it yet
-        *[Implies(discard[m][i], And(Not(discard[m0][i]) for m0 in range(m-5, -1, -5))) for i in range(50)],
+        *[Implies(discard[m][i], And(Not(discard[m0][i]) for m0 in range(m-num_players, -1, -num_players))) for i in range(NUM_CARDS)],
         # we can only discard at most one card (FIXME: avoid quadratic formula)
-        AtMostOne(discard[m][i] for i in range(50)),
-        #*[Not(And(discard[m][i], discard[m][j])) for i in range(50) for j in range(i)],
+        AtMostOne(discard[m][i] for i in range(NUM_CARDS)),
+        #*[Not(And(discard[m][i], discard[m][j])) for i in range(NUM_CARDS) for j in range(i)],
         # we can only play a card if it matches the progress
-        *[Implies(And(discard[m][i], play[m]), And(Not(progress[m-1][deck[i]]), progress[m-1][deck[i][0], deck[i][1]-1])) for i in range(50)],
+        *[Implies(And(discard[m][i], play[m]), And(Not(progress[m-1][deck[i]]), progress[m-1][deck[i][0], deck[i][1]-1])) for i in range(NUM_CARDS)],
         # change of progress
-        *[Iff(progress[m][c, k], Or(progress[m-1][c, k], And(play[m], Or(discard[m][i] for i in range(50) if deck[i] == (c, k))))) for c in COLORS for k in range(1, 6)],
+        *[Iff(progress[m][c, k], Or(progress[m-1][c, k], And(play[m], Or(discard[m][i] for i in range(NUM_CARDS) if deck[i] == (c, k))))) for c in COLORS for k in range(1, 6)],
         # extra round bool
-        Iff(extraround[m], Or(extraround[m-1], draw[m-1][49])),
+        Iff(extraround[m], Or(extraround[m-1], draw[m-1][NUM_CARDS-1])),
         # dummy turn bool
-        *[Iff(dummyturn[m], Or(dummyturn[m-1], draw[m-6][49])) for i in range(0,1) if m >= 5]
+        *[Iff(dummyturn[m], Or(dummyturn[m-1], draw[m-1 - num_players][NUM_CARDS-1])) for i in range(0,1) if m >= num_players]
     )
 
     win = And(
         # maximum progress at each color
-        *[progress[MAX_MOVES-1][c, 5] for c in COLORS],
+        *[progress[max_moves-1][c, 5] for c in COLORS],
         # played every color/value combination (NOTE: redundant)
-        *[Or(And(discard[m][i], play[m]) for m in range(MAX_MOVES) for i in range(50) if deck[i] == (c, k)) for c in COLORS for k in range(1, 6)]
+        *[Or(And(discard[m][i], play[m]) for m in range(max_moves) for i in range(50) if deck[i] == (c, k)) for c in COLORS for k in range(1, 6)]
     )
 
-    constraints = And(*[valid_move(m) for m in range(MAX_MOVES)], win)
-    print('Solving instance with {} variables, {} nodes'.format(len(get_atoms(constraints)), get_formula_size(constraints)))
+    constraints = And(*[valid_move(m) for m in range(max_moves)], win)
+#    print('Solving instance with {} variables, {} nodes'.format(len(get_atoms(constraints)), get_formula_size(constraints)))
 
     model = get_model(constraints)
     if model:
 #        print_model(model, deck)
-        solution = toJSON(model, deck)
+        solution = toJSON(model, deck, num_players)
         return True, solution
     else:
         print('unsatisfiable')
@@ -119,8 +127,9 @@ def solve(deck_str):
         #for f in ucore:
         #    print(f.serialize())
 
-def print_model(model, deck):
-    for m in range(MAX_MOVES):
+def print_model(model, deck, num_players):
+    draw = globals()['draw'][num_players]
+    for m in range(max_moves[num_players]):
         print('=== move {} ==='.format(m))
         print('clues: ' + ''.join(str(i) for i in range(1, 9) if model.get_py_value(clues[m][i])))
         print('strikes: ' + ''.join(str(i) for i in range(1, NUM_STRIKES) if model.get_py_value(strikes[m][i])))
@@ -131,21 +140,22 @@ def print_model(model, deck):
         flags = ['discard_any', 'draw_any', 'play', 'play5', 'incr_clues', 'strike', 'extraround', 'dummyturn']
         print(', '.join(f for f in flags if model.get_py_value(globals()[f][m])))
 
-def toJSON(model, deck):
+def toJSON(model, deck, num_players):
     deck_json = [{"suitIndex": COLORS.index(s), "rank": r} for (s,r) in deck]
-    players = ["Alice", "Bob", "Cathy", "Donald", "Emily"]
-    hands = [deck[4*p:4*(p+1)] for p in range(0,5)]
+    players = ["Alice", "Bob", "Cathy", "Donald", "Emily"][:num_players]
+    hands = [deck[hand_size[num_players]*p:hand_size[num_players]*(p+1)] for p in range(0,num_players)]
+    draw = globals()['draw'][num_players]
     actions = []
-    for m in range(MAX_MOVES):
+    for m in range(max_moves[num_players]):
         if model.get_py_value(dummyturn[m]):
             break
         if model.get_py_value(discard_any[m]):
-            discarded = next(i for i in range(0,50) if model.get_py_value(discard[m][i]))
-            icard = hands[m % 5].index(deck[discarded])
-            for i in range(icard, 3):
-                hands[m % 5][i] = hands[m % 5][i + 1]
+            discarded = next(i for i in range(0,NUM_CARDS) if model.get_py_value(discard[m][i]))
+            icard = hands[m % num_players].index(deck[discarded])
+            for i in range(icard, hand_size[num_players] - 1):
+                hands[m % num_players][i] = hands[m % num_players][i + 1]
             if model.get_py_value(draw_any[m]):
-                hands[m % 5][3] = next(deck[i] for i in range(20, 50) if model.get_py_value(draw[m][i]))
+                hands[m % num_players][hand_size[num_players] - 1] = next(deck[i] for i in range(last_hand_card[num_players] + 1, NUM_CARDS) if model.get_py_value(draw[m][i]))
             if model.get_py_value(play[m]) or model.get_py_value(strike[m]):
                 actions.append({
                     "type": 0,
@@ -159,8 +169,8 @@ def toJSON(model, deck):
         else:
             actions.append({
                 "type": 3,
-                "target": (m + 1) % 5,
-                "value": hands[(m+1) % 5][0][1]
+                "target": (m + 1) % num_players,
+                "value": hands[(m+1) % num_players][0][1]
                 })
     actions.append({
         "type": 4,
@@ -177,6 +187,7 @@ def toJSON(model, deck):
             }
     return json.dumps(game)
 
-solvable, sol = solve(deck_str)
-if solvable:
-    print(sol)
+if __name__ == "__main__":
+    solvable, sol = solve(deck_str)
+    if solvable:
+        print(sol)
