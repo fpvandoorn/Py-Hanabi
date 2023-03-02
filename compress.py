@@ -188,34 +188,3 @@ def decompressJSONGame(game_str: str)->dict:
             }
     return game
 
-## test
-
-deck = [DeckCard(0,1), DeckCard(2,4), DeckCard(4,5)]
-c = compress_deck(deck)
-l = decompress_deck(c)
-print(deck, l)
-
-f = [Action(ActionType.Discard, 2), Action(ActionType.Play, 3, 8)]
-a = compress_actions(f)
-x = decompress_actions(a)
-print(a)
-print(x)
-
-c = '15ywseiijdqgholmnxcqrrxpvppvuukdkacakauswlmntfffbbgh'
-l = decompress_deck(c)
-print(l)
-
-
-game = {"deck": [{"rank": 5, "suitIndex": 4}, {"rank": 3, "suitIndex": 4}, {"rank": 4, "suitIndex": 3}, {"rank": 5, "suitIndex": 0}, {"rank": 4, "suitIndex": 1}, {"rank": 4, "suitIndex": 1}, {"rank": 5, "suitIndex": 1}, {"rank": 4, "suitIndex": 0}, {"rank": 2, "suitIndex": 3}, {"rank": 2, "suitIndex": 1}, {"rank": 3, "suitIndex": 1}, {"rank": 5, "suitIndex": 2}, {"rank": 2, "suitIndex": 2}, {"rank": 3, "suitIndex": 2}, {"rank": 4, "suitIndex": 2}, {"rank": 4, "suitIndex": 4}, {"rank": 3, "suitIndex": 0}, {"rank": 2, "suitIndex": 3}, {"rank": 3, "suitIndex": 3}, {"rank": 3, "suitIndex": 3}, {"rank": 4, "suitIndex": 4}, {"rank": 1, "suitIndex": 3}, {"rank": 2, "suitIndex": 4}, {"rank": 1, "suitIndex": 3}, {"rank": 1, "suitIndex": 3}, {"rank": 2, "suitIndex": 4}, {"rank": 1, "suitIndex": 4}, {"rank": 1, "suitIndex": 4}, {"rank": 1, "suitIndex": 2}, {"rank": 4, "suitIndex": 0}, {"rank": 1, "suitIndex": 2}, {"rank": 1, "suitIndex": 0}, {"rank": 3, "suitIndex": 0}, {"rank": 1, "suitIndex": 0}, {"rank": 1, "suitIndex": 2}, {"rank": 1, "suitIndex": 0}, {"rank": 1, "suitIndex": 4}, {"rank": 4, "suitIndex": 3}, {"rank": 3, "suitIndex": 4}, {"rank": 2, "suitIndex": 2}, {"rank": 3, "suitIndex": 2}, {"rank": 4, "suitIndex": 2}, {"rank": 5, "suitIndex": 3}, {"rank": 1, "suitIndex": 1}, {"rank": 1, "suitIndex": 1}, {"rank": 1, "suitIndex": 1}, {"rank": 2, "suitIndex": 0}, {"rank": 2, "suitIndex": 0}, {"rank": 2, "suitIndex": 1}, {"rank": 3, "suitIndex": 1}], "first_player": 0, "options": {"variant": "No Variant"}, "players": ["Alice", "Bob", "Cathy", "Donald", "Emily"], "actions": [{"type": 4, "target": 0, "value": 4}]}
-
-print("STARTING TEST")
-c = compressJSONGame(game)
-
-
-
-d = decompressJSONGame(c)
-print(d)
-
-
-print(c)
-print("hanab.live/shared-replay-json/" + c)
