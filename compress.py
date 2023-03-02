@@ -12,9 +12,11 @@ COLORS = 'rygbp'
 with open("variants.json", 'r') as f:
     VARIANTS = json.loads(f.read())
 
-def variant_id(variant):
-    return next(var['id'] for var in VARIANTS if var['name'] == variant)
+def variant_id(variant_name):
+    return next(var['id'] for var in VARIANTS if var['name'] == variant_name)
 
+def variant_name(variant_id):
+    return next(var['name'] for var in VARIANTS if var['id'] == variant_id)
 
 ## Helper method, iterate over chunks of length n in a string
 def chunks(s: str, n: int):
@@ -101,7 +103,7 @@ def decompress_actions(actions_str: str) -> List[Action]:
             raise ValueError("Invalid length of action str")
     typeRange = maxType - minType + 1
     def decompress_action(action):
-        actionType = ActionType(BASE62.index(action[0]) % typeRange)
+        actionType = ActionType((BASE62.index(action[0]) % typeRange) + minType)
         value = None
         if actionType not in [actionType.Play, actionType.Discard]:
             value = BASE62.index(action[0]) // typeRange
@@ -171,6 +173,21 @@ def compressJSONGame(game_json: dict) -> str:
     out += str(variant_id(variant))
     return ''.join(more_itertools.intersperse("-", out, 20))
 
+def decompressJSONGame(game_str: str)->dict:
+    game = {}
+    game_str = game_str.replace("-", "")
+    try:
+        [players_deck, actions, variant_id] = game_str.split(",")
+    except:
+        raise ValueError("Invalid format of compressed string!")
+    game['players'] = ["Alice", "Bob", "Cathy", "Donald", "Emily"][:int(players_deck[0])]
+    game['deck'] = decompress_deck(players_deck[1:])
+    game['actions'] = decompress_actions(actions)
+    game['options'] = {
+            "variant": variant_name(int(variant_id))
+            }
+    return game
+
 ## test
 
 deck = [DeckCard(0,1), DeckCard(2,4), DeckCard(4,5)]
@@ -193,5 +210,12 @@ game = {"deck": [{"rank": 5, "suitIndex": 4}, {"rank": 3, "suitIndex": 4}, {"ran
 
 print("STARTING TEST")
 c = compressJSONGame(game)
+
+
+
+d = decompressJSONGame(c)
+print(d)
+
+
 print(c)
 print("hanab.live/shared-replay-json/" + c)
