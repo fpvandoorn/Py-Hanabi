@@ -1,0 +1,32 @@
+import json
+import requests
+import requests_cache
+
+
+## Cache all requests to site to reduce traffic and latency
+session = requests_cache.CachedSession('hanab.live')
+
+def get(url):
+#    print("sending request for " + url)
+    response =  session.get("https://hanab.live/" + url)
+    if not response.status_code == 200:
+        return None
+    if "application/json" in response.headers['content-type']:
+        return json.loads(response.text)
+
+def api(url):
+    link = "api/v1/" + url
+    if "?" in url:
+        link += "&"
+    else:
+        link += "?"
+    link += "size=100"
+    return get(link)
+
+def replay(seed):
+    r = api("seed/" + str(seed))
+    try:
+        game_id = r['rows'][0]['id']
+    except TypeError:
+        return None
+    return get("export/" + str(game_id))
