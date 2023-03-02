@@ -31,7 +31,8 @@ def create_games_table():
                     "one_extra_card BOOLEAN,"
                     "one_less_card  BOOLEAN,"
                     "all_or_nothing BOOLEAN,"
-                    "num_turns      SMALLINT"
+                    "num_turns      SMALLINT,"
+                    "actions        TEXT"
                 ");".format(tablename))
         conn.commit()
 #    else:
@@ -51,6 +52,7 @@ def create_seeds_table():
                     "variant_id              SMALLINT NOT NULL,"
                     "feasible                BOOLEAN," # theoretical solvability
                     "max_score_theoretical   SMALLINT" # if infeasible, max score
+                    "deck                    VARCHAR(60)"
                 ");".format(tablename))
         conn.commit()
 
