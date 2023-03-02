@@ -2,11 +2,12 @@ import requests
 import requests_cache
 import json
 from sat import COLORS, solve
+from database import Game, store, load, commit
 
 session = requests_cache.CachedSession('hanab.live')
 
 def get(url):
-    print("sending request for " + url)
+#    print("sending request for " + url)
     response =  session.get("https://hanab.live/" + url)
     if not response.status_code == 200:
         return None
@@ -22,8 +23,8 @@ def api(url):
     link += "size=100"
     return get(link)
 
-#r = api("variants/0")
-#print(json.dumps(r, indent=4))
+r = api("variants/0")
+print(json.dumps(r, indent=4))
 
 def replay(seed):
     r = api("seed/" + str(seed))
@@ -60,15 +61,34 @@ def solvable(replay):
     return solve(deck_str, len(replay["players"]))
 
 
+
+num_entries = 0
+for i in range(0,10000):
+    r = api("variants/0?page=" + str(i))
+    for row in r['rows']:
+        num_entries += 1
+        row.pop('users')
+        row.pop('datetime')
+        g = Game(row)
+        g.variant_id = 0
+        store(g)
+
+print('considered {} entries'.format(num_entries))
+commit()
+exit(0)
+
+
 seeds = {2: [], 3: [], 4: [], 5: [], 6: []}
 num_games = 0
-for i in range(0,1000):
+for i in range(0,10000):
     r = api("variants/0?page=" + str(i))
     for row in r['rows']:
         num_games += 1
         if row['seed'] not in seeds[row['num_players']]:
             seeds[row['num_players']].append(row['seed'])
 #                print('found new non-max-game in 5p: ' + row['seed'])
+
+
 print('looked at {} games'.format(num_games))
 for i in range(2,7):
     print("Found {} seeds in {}-player in database".format(len(seeds[i]), i))
@@ -88,7 +108,7 @@ for seed in hard_seeds:
     s, sol = solvable(r)
     if s:
         print("Seed {} was found to be solvable".format(seed))
-        print(sol)
+#        print(sol)
     else:
         print("==============================")
         print("Found non-solvable seed {}", seed)
