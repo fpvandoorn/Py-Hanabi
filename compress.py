@@ -47,6 +47,7 @@ class ActionType(Enum):
     ColorClue = 2
     RankClue = 3
     EndGame = 4
+    VoteTerminate = 5
 
 
 class Action():
@@ -57,7 +58,6 @@ class Action():
 
     @staticmethod
     def from_json(action):
-        print("Converting {} to an action".format(action))
         return Action(
                 ActionType(action['type']),
                 int(action['target']),
@@ -72,17 +72,18 @@ class Action():
                 return "Discard card {}".format(self.target)
             case ActionType.ColorClue:
                 return "Clue color {} to player {}".format(self.value, self.target)
-            case ActionType.ColorClue:
+            case ActionType.RankClue:
                 return "Clue rank {} to player {}".format(self.value, self.target)
             case ActionType.EndGame:
                 return "Player {} ends the game (code {})".format(self.target, self.value)
-        return "Undefined"
+            case ActionType.VoteTerminate:
+                return "Players vote to terminate the game"
+        return "Undefined action"
 
 
 def compress_actions(actions: List[Action]) -> str:
     minType = 0
     maxType = 0
-    print(actions)
     if len(actions) != 0:
         minType = min(map(lambda a: a.type.value, actions))
         maxType = max(map(lambda a: a.type.value, actions))
