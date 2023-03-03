@@ -5,7 +5,7 @@ import more_itertools
 
 
 BASE62 = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-COLORS = 'rygbp'
+COLORS = 'rygbpt'
 
 
 # Some setup for conversion between variant id and name
@@ -77,7 +77,7 @@ class Action():
             case ActionType.EndGame:
                 return "Player {} ends the game (code {})".format(self.target, self.value)
             case ActionType.VoteTerminate:
-                return "Players vote to terminate the game"
+                return "Players vote to terminate the game (code {})".format(self.value)
         return "Undefined action"
 
 
@@ -89,7 +89,9 @@ def compress_actions(actions: List[Action]) -> str:
         maxType = max(map(lambda a: a.type.value, actions))
     typeRange = maxType - minType + 1
     def compress_action(action):
-        value = 0 if action.value is None else action.value
+        ## We encode action values with +1 to differentiate 
+        # null (encoded 0) and 0 (encoded 1)
+        value = 0 if action.value is None else action.value + 1
         a = BASE62[typeRange * value + (action.type.value - minType)]
         b = BASE62[action.target] 
         return a + b
@@ -112,7 +114,10 @@ def decompress_actions(actions_str: str) -> List[Action]:
         actionType = ActionType((BASE62.index(action[0]) % typeRange) + minType)
         value = None
         if actionType not in [actionType.Play, actionType.Discard]:
-            value = BASE62.index(action[0]) // typeRange
+            ## We encode values with +1 to differentiate null (encoded 0) and 0 (encoded 1)
+            value = BASE62.index(action[0]) // typeRange - 1
+            if value == -1:
+                value = None
         target = BASE62.index(action[1])
         return Action(actionType, target, value)
     return [decompress_action(a) for a in chunks(actions_str[2:], 2)]
@@ -194,4 +199,3 @@ def decompressJSONGame(game_str: str)->dict:
             "variant": variant_name(int(variant_id))
             }
     return game
-
