@@ -28,11 +28,13 @@ def download_games(variant_id, name=None):
     print('Downloaded and stored {} entries for variant {} ({})'.format(num_entries, variant_id, name))
     commit()
 
-def export_game(game_id) -> bool:
+# requires seed AND game to already have an entry in database
+# return: (successfully exported game, game without cheat options, null if not exported)
+def export_game(game_id) -> [bool, bool]:
     r = get("export/{}".format(game_id))
     if r is None:
         print("Failed to export game id {}".format(game_id))
-        return False
+        return False, None
     assert(r['id'] == game_id)
     deck = compress_deck([DeckCard.from_json(card) for card in r['deck']])
     with conn.cursor() as cur:
@@ -41,11 +43,25 @@ def export_game(game_id) -> bool:
         actions = compress_actions([Action.from_json(a) for a in r['actions']])
     except:
         print("Unknown action while exporting game id {}".format(game_id))
-        return False
+        raise
+        return False, None
+    options = r.get('options', {})
+    deck_plays = options.get('deckPlays', False)
+    one_extra_card = options.get('oneExtraCard', False)
+    one_less_card = options.get('oneLessCard', False)
+    all_or_nothing = options.get('allOrNothing', False)
     with conn.cursor() as cur:
-        cur.execute("UPDATE games SET actions=(%s) WHERE id=(%s);", (actions, game_id))
+        cur.execute(
+                "UPDATE games SET"
+                "deck_plays=(%s)"
+                "one_extra_card=(%s)"
+                "one_less_card=(%s)"
+                "all_or_nothing=(%s)"
+                "actions=(%s)"
+                "WHERE id=(%s);",
+                (deck_plays, one_extra_card, one_less_card, all_or_nothing, actions, game_id))
     conn.commit()
-    return True
+    return True, not any(deck_plays, one_extra_card, one_less_card, all_or_nothing)
 
 if __name__ == "__main__":
     export_game(913436)
