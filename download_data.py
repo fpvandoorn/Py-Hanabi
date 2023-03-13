@@ -52,16 +52,16 @@ def export_game(game_id) -> [bool, bool]:
     all_or_nothing = options.get('allOrNothing', False)
     with conn.cursor() as cur:
         cur.execute(
-                "UPDATE games SET"
-                "deck_plays=(%s)"
-                "one_extra_card=(%s)"
-                "one_less_card=(%s)"
-                "all_or_nothing=(%s)"
-                "actions=(%s)"
-                "WHERE id=(%s);",
+                "UPDATE games SET "
+                "deck_plays = (%s),"
+                "one_extra_card = (%s),"
+                "one_less_card = (%s),"
+                "all_or_nothing = (%s),"
+                "actions = (%s) "
+                "WHERE id = (%s);",
                 (deck_plays, one_extra_card, one_less_card, all_or_nothing, actions, game_id))
     conn.commit()
-    return True, not any(deck_plays, one_extra_card, one_less_card, all_or_nothing)
+    return True, not any([deck_plays, one_extra_card, one_less_card, all_or_nothing])
 
 if __name__ == "__main__":
     export_game(913436)
