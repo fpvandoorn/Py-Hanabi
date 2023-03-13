@@ -1,8 +1,11 @@
 import json
+from time import sleep
 from site_api import get, api, replay
 from sat import COLORS, solve
 from database import Game, store, load, commit, conn
 from download_data import export_game
+from variants import num_suits, VARIANTS
+from alive_progress import alive_bar
 
 
 def update_seeds_db():
@@ -35,8 +38,60 @@ def get_decks_of_seeds():
         export_game(game_id)
         conn.commit()
 
-get_decks_of_seeds()
+
+def update_trivially_feasible_games():
+    cur = conn.cursor()
+    for var in VARIANTS:
+        cur.execute("SELECT COUNT(*) FROM seeds WHERE variant_id = (%s) AND feasible is null", (var['id'],))
+        num_seeds = cur.fetchone()[0]
+        cur.execute("SELECT seed, id FROM games WHERE score = (%s) AND variant_id = (%s) ORDER BY seed;", (5 * len(var['suits']), var['id']))
+        res = cur.fetchall()
+        print('Checking variant {} (id {}), found {} seeds with {} max-score games to check...'.format(var['name'], var['id'], num_seeds, len(res)))
+        cur_seed = None
+        seed_finished = False
+        with alive_bar(num_seeds) as bar:
+            for (seed, game_id) in res:
+                if seed_finished and cur_seed == seed:
+                    print('skipping further game of seed {}'.format(seed))
+                    continue
+                if cur_seed != seed:
+                    bar()
+                    cur_seed = seed
+                seed_finished = False
+                cur.execute("SELECT deck_plays, one_extra_card, one_less_card, all_or_nothing FROM games WHERE id = (%s)", (game_id,))
+                cheat_options = cur.fetchall()[0]
+                valid = None
+                if None in cheat_options:
+                    print('Game {} not found in database, exporting...'.format(game_id))
+                    succ, valid = export_game(game_id)
+                    if not succ:
+                        print('Error exporting game {}.'.format(game_id))
+                        continue
+                else:
+                    valid = not any(cheat_options)
+                    print('Game {} already in database, valid: {}'.format(game_id, valid))
+                if valid:
+                    print('Seed {:9} (variant {} / {}) found to be feasible via game {:6}'.format(seed, var['id'], var['name'], game_id))
+                    cur.execute("UPDATE seeds SET feasible = (%s) WHERE seed = (%s)", (True, seed))
+                    conn.commit()
+                    seed_finished = True
+                else:
+                    print('Cheaty game found')
+    return
+    for (seed,) in cur:
+        cur2.execute("UPDATE seeds SET feasible=TRUE WHERE seed=(%s)", (seed,))
+        print("Seed {} found to be feasible")
+        conn.commit()
+
+update_trivially_feasible_games()
 exit(0)
+
+
+
+def solve_unknown_seeds():
+    for var in VARIANTS:
+        cur.execute("SELECT deck FROM games WHERE seed = (%s)", (a,))
+
 
 
 print('looked at {} games'.format(num_games))
