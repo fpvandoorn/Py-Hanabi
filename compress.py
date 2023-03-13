@@ -189,3 +189,7 @@ def decompressJSONGame(game_str: str)->dict:
             "variant": variant_name(int(variant_id))
             }
     return game
+
+def link(game_json: dict) -> str:
+    compressed = compressJSONGame(game_json)
+    return "https://hanab.live/replay-json/{}".format(compressed)
