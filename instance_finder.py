@@ -42,46 +42,36 @@ def get_decks_of_seeds():
 def update_trivially_feasible_games():
     cur = conn.cursor()
     for var in VARIANTS:
-        cur.execute("SELECT COUNT(*) FROM seeds WHERE variant_id = (%s) AND feasible is null", (var['id'],))
-        num_seeds = cur.fetchone()[0]
-        cur.execute("SELECT seed, id FROM games WHERE score = (%s) AND variant_id = (%s) ORDER BY seed;", (5 * len(var['suits']), var['id']))
-        res = cur.fetchall()
-        print('Checking variant {} (id {}), found {} seeds with {} max-score games to check...'.format(var['name'], var['id'], num_seeds, len(res)))
-        cur_seed = None
-        seed_finished = False
-        with alive_bar(num_seeds) as bar:
-            for (seed, game_id) in res:
-                if seed_finished and cur_seed == seed:
-                    print('skipping further game of seed {}'.format(seed))
-                    continue
-                if cur_seed != seed:
-                    bar()
-                    cur_seed = seed
-                seed_finished = False
-                cur.execute("SELECT deck_plays, one_extra_card, one_less_card, all_or_nothing FROM games WHERE id = (%s)", (game_id,))
-                cheat_options = cur.fetchall()[0]
-                valid = None
-                if None in cheat_options:
-                    print('Game {} not found in database, exporting...'.format(game_id))
-                    succ, valid = export_game(game_id)
-                    if not succ:
-                        print('Error exporting game {}.'.format(game_id))
-                        continue
-                else:
-                    valid = not any(cheat_options)
-                    print('Game {} already in database, valid: {}'.format(game_id, valid))
-                if valid:
-                    print('Seed {:9} (variant {} / {}) found to be feasible via game {:6}'.format(seed, var['id'], var['name'], game_id))
-                    cur.execute("UPDATE seeds SET feasible = (%s) WHERE seed = (%s)", (True, seed))
-                    conn.commit()
-                    seed_finished = True
-                else:
-                    print('Cheaty game found')
-    return
-    for (seed,) in cur:
-        cur2.execute("UPDATE seeds SET feasible=TRUE WHERE seed=(%s)", (seed,))
-        print("Seed {} found to be feasible")
-        conn.commit()
+        cur.execute("SELECT seed FROM seeds WHERE variant_id = (%s) AND feasible is null", (var['id'],))
+        seeds = cur.fetchall()
+        print('Checking variant {} (id {}), found {} seeds to check...'.format(var['name'], var['id'], len(seeds)))
+
+        with alive_bar(total=len(seeds), title='{} ({})'.format(var['name'], var['id'])) as bar:
+            for (seed,) in seeds:
+                cur.execute("SELECT id, deck_plays, one_extra_card, one_less_card, all_or_nothing "
+                            "FROM games WHERE score = (%s) AND seed = (%s) ORDER BY id;",
+                            (5 * len(var['suits']), seed)
+                )
+                res = cur.fetchall()
+                print("Checking seed {}: {:3} results".format(seed, len(res)))
+                for (game_id, a, b, c, d) in res:
+                    if None in [a,b,c,d]:
+                        print('  Game {} not found in database, exporting...'.format(game_id))
+                        succ, valid = export_game(game_id)
+                        if not succ:
+                            print('Error exporting game {}.'.format(game_id))
+                            continue
+                    else:
+                        valid = not any([a,b,c,d])
+                        print('  Game {} already in database, valid: {}'.format(game_id, valid))
+                    if valid:
+                        print('Seed {:9} (variant {} / {}) found to be feasible via game {:6}'.format(seed, var['id'], var['name'], game_id))
+                        cur.execute("UPDATE seeds SET feasible = (%s) WHERE seed = (%s)", (True, seed))
+                        conn.commit()
+                        break
+                    else:
+                        print('  Cheaty game found')
+                bar()
 
 update_trivially_feasible_games()
 exit(0)
