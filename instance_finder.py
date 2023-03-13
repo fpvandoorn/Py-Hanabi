@@ -6,6 +6,10 @@ from database import Game, store, load, commit, conn
 from download_data import export_game
 from variants import num_suits, VARIANTS
 from alive_progress import alive_bar
+from compress import decompress_deck
+from concurrent.futures import ProcessPoolExecutor
+from threading import Lock
+from time import sleep
 
 
 def update_seeds_db():
@@ -73,15 +77,76 @@ def update_trivially_feasible_games():
                         print('  Cheaty game found')
                 bar()
 
-update_trivially_feasible_games()
-exit(0)
 
+
+def get_decks_for_all_seeds():
+    cur = conn.cursor()
+    cur.execute("SELECT id "
+                "FROM games "
+                "  INNER JOIN seeds "
+                "  ON seeds.seed = games.seed"
+                "    WHERE"
+                "      seeds.deck is null"
+                "      AND"
+                "      games.id = ("
+                "         SELECT id FROM games WHERE games.seed = seeds.seed LIMIT 1"
+                "     )"
+                )
+    print("Exporting decks for all seeds")
+    res = cur.fetchall()
+    with alive_bar(len(res), title="Exporting decks") as bar:
+        for (game_id,) in res:
+            export_game(game_id)
+            bar()
+
+
+def solve_seed(seed, num_players, deck_compressed):
+    print('Process {} start'.format(seed))
+    deck = decompress_deck(deck_compressed)
+    print('Process {} decompressed deck: {}'.format(seed, deck))
+    solvable, solution = solve(deck, num_players)
+#    bar()
+
+    print('Process {} finished computation'.format(seed))
+
+    mutex.acquire()
+    print('Process {} got mutex'.format(seed))
+    lcur = conn.cursor()
+    print('Process {} obtained cursor'.format(seed))
+    lcur.execute("UPDATE seeds SET feasible = (%s) WHERE seed = (%s)", (solvable, seed))
+
+    conn.commit()
+    if not solvable:
+        print('Seed {} ({} players) not solvable: {}'.format(seed, num_players, deck))
+    print('thread finished')
+ #   bar()
+    mutex.release()
 
 
 def solve_unknown_seeds():
+    cur = conn.cursor()
     for var in VARIANTS:
-        cur.execute("SELECT deck FROM games WHERE seed = (%s)", (a,))
+        cur.execute("SELECT seed, num_players, deck FROM seeds WHERE variant_id = (%s) AND feasible IS NULL AND deck IS NOT NULL ORDER BY num_players DESC", (var['id'],))
+        res = cur.fetchall()
+        mutex = Lock()
 
+#        with alive_bar(len(res), title='Seed solving on {}'.format(var['name'])) as bar:
+        def test():
+            print("test!")
+            sleep(5)
+
+        print('Starting process pool')
+        with ProcessPoolExecutor(max_workers=2) as executor:
+            for r in res[:5]:
+                print('submitting task: {}, {}, {}'.format(*r))
+                f = executor.submit(solve_seed, *r)
+                sleep(.5)
+        executor.shutdown(wait=True)
+        break
+
+
+solve_unknown_seeds()
+exit(0)
 
 
 print('looked at {} games'.format(num_games))
