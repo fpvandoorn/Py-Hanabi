@@ -7,10 +7,12 @@ from download_data import export_game
 from variants import num_suits, VARIANTS
 from alive_progress import alive_bar
 from compress import decompress_deck
-from concurrent.futures import ProcessPoolExecutor
+import concurrent.futures
 from threading import Lock
 from time import sleep
 
+
+MAX_PROCESSES=6
 
 def update_seeds_db():
     cur2 = conn.cursor()
@@ -100,26 +102,22 @@ def get_decks_for_all_seeds():
             bar()
 
 
-def solve_seed(seed, num_players, deck_compressed):
-    print('Process {} start'.format(seed))
-    deck = decompress_deck(deck_compressed)
-    print('Process {} decompressed deck: {}'.format(seed, deck))
-    solvable, solution = solve(deck, num_players)
-#    bar()
+mutex = Lock()
 
-    print('Process {} finished computation'.format(seed))
+def solve_seed(seed, num_players, deck_compressed):
+    deck = decompress_deck(deck_compressed)
+    solvable, solution = solve(deck, num_players)
 
     mutex.acquire()
-    print('Process {} got mutex'.format(seed))
     lcur = conn.cursor()
-    print('Process {} obtained cursor'.format(seed))
     lcur.execute("UPDATE seeds SET feasible = (%s) WHERE seed = (%s)", (solvable, seed))
-
     conn.commit()
+
     if not solvable:
-        print('Seed {} ({} players) not solvable: {}'.format(seed, num_players, deck))
-    print('thread finished')
- #   bar()
+        with open('unsolvable_seeds', 'a') as f:
+            f.write('{}-player, seed {}\n'.format(num_players, seed))
+#        print('Seed {} ({} players) not solvable: {}'.format(seed, num_players, deck))
+
     mutex.release()
 
 
@@ -128,20 +126,12 @@ def solve_unknown_seeds():
     for var in VARIANTS:
         cur.execute("SELECT seed, num_players, deck FROM seeds WHERE variant_id = (%s) AND feasible IS NULL AND deck IS NOT NULL ORDER BY num_players DESC", (var['id'],))
         res = cur.fetchall()
-        mutex = Lock()
 
-#        with alive_bar(len(res), title='Seed solving on {}'.format(var['name'])) as bar:
-        def test():
-            print("test!")
-            sleep(5)
-
-        print('Starting process pool')
-        with ProcessPoolExecutor(max_workers=2) as executor:
-            for r in res[:5]:
-                print('submitting task: {}, {}, {}'.format(*r))
-                f = executor.submit(solve_seed, *r)
-                sleep(.5)
-        executor.shutdown(wait=True)
+        with concurrent.futures.ProcessPoolExecutor(max_workers=MAX_PROCESSES) as executor:
+            fs = [executor.submit(solve_seed, *r) for r in res]
+            with alive_bar(len(res), title='Seed solving on {}'.format(var['name'])) as bar:
+                for f in concurrent.futures.as_completed(fs):
+                    bar()
         break
 
 
