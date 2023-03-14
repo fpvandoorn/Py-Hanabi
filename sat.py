@@ -2,9 +2,12 @@ from pysmt.shortcuts import Symbol, Bool, Not, Implies, Iff, And, Or, AtMostOne,
 from pysmt.rewritings import conjunctive_partition
 import json
 from typing import List
+from concurrent.futures import ProcessPoolExecutor
 
 from compress import DeckCard, Action, ActionType, link
+from greedy_solver import GameState
 
+COLORS = 'rygbp'
 STANDARD_HAND_SIZE = {2: 5, 3: 5, 4: 4, 5: 4, 6: 3}
 NUM_STRIKES_TO_LOSE = 3
 
@@ -267,7 +270,6 @@ def solve(deck: List[DeckCard], num_players=5):
         solution = toJSON(model, deck, ls)
         return True, solution
     else:
-        print('unsatisfiable')
         return False, None
         #conj = list(conjunctive_partition(constraints))
         #print('statements: {}'.format(len(conj)))
@@ -289,46 +291,25 @@ def print_model(model, deck, num_players):
         flags = ['discard_any', 'draw_any', 'play', 'play5', 'incr_clues', 'strike', 'extraround', 'dummyturn']
         print(', '.join(f for f in flags if model.get_py_value(globals()[f][m])))
 
+
 def toJSON(model, deck: List[DeckCard], ls: Literals) -> dict:
-    players = ["Alice", "Bob", "Cathy", "Donald", "Emily"][:ls.num_players]
-    # we keep track of the hands to output some dummy clues
-    hands = [deck[ls.hand_size * p : ls.hand_size *(p+1)] for p in range(0, ls.num_players)]
-    actions = []
+    gs = GameState(ls.num_players, deck)
+
     for m in range(ls.max_moves):
         if model.get_py_value(ls.dummyturn[m]):
             break
         if model.get_py_value(ls.discard_any[m]):
-            discarded = next(i for i in range(0,ls.deck_size) if model.get_py_value(ls.discard[m][i]))
-            icard = hands[m % ls.num_players].index(deck[discarded])
-            for i in range(icard, ls.hand_size - 1):
-                hands[m % ls.num_players][i] = hands[m % ls.num_players][i + 1]
-            if model.get_py_value(ls.draw_any[m]):
-                hands[m % ls.num_players][ls.hand_size - 1] = next(deck[i] for i in range(ls.distributed_cards, ls.deck_size) if model.get_py_value(ls.draw[m][i]))
+            card_idx = next(i for i in range(0, ls.deck_size) if model.get_py_value(ls.discard[m][i]))
             if model.get_py_value(ls.play[m]) or model.get_py_value(ls.strike[m]):
-                actions.append( Action( ActionType.Play, target=discarded) )
+                gs.play(card_idx)
             else:
-                actions.append( Action( ActionType.Discard, target=discarded) )
+                gs.discard(card_idx)
         else:
-            actions.append( Action(
-                ActionType.RankClue,
-                target=(m+1) % ls.num_players,                 # clue next player
-                value=hands[(m+1) % ls.num_players][0].rank    # clue rank of rightmost card
-                )
-                           )
-    actions.append( Action (ActionType.EndGame, target=0, value=1))
-    game = {
-            "deck": deck,
-            "players": players,
-            "actions": actions,
-            "first_player": 0,
-            "options": {
-                "variant": "No Variant",
-                }
-            }
-    return game
+            gs.clue()
 
-if __name__ == "__main__":
-    COLORS = 'rygbp'
+    return gs.to_json()
+
+def run_deck():
     deck_str = 'p5 p3 b4 r5 y4 y4 y5 r4 b2 y2 y3 g5 g2 g3 g4 p4 r3 b2 b3 b3 p4 b1 p2 b1 b1 p2 p1 p1 g1 r4 g1 r1 r3 r1 g1 r1 p1 b4 p3 g2 g3 g4 b5 y1 y1 y1 r2 r2 y2 y3'
 
     deck = [DeckCard(COLORS.index(c[0]), int(c[1])) for c in deck_str.split(" ")]
@@ -338,3 +319,6 @@ if __name__ == "__main__":
     if solvable:
         print(sol)
         print(link(sol))
+
+if __name__ == "__main__":
+    run_deck()
