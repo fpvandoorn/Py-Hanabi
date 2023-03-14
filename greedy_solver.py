@@ -35,8 +35,10 @@ class CardState():
 
 
 class GameState():
-    def __init__(self, num_players, deck):
+    def __init__(self, num_players, deck, debug=False):
         assert ( 2 <= num_players <= 6)
+
+        self.debug = debug
 
         self.num_players = num_players
         self.deck = deck
@@ -46,6 +48,7 @@ class GameState():
         self.num_suits = max(map(lambda c: c.suitIndex, deck)) + 1
         self.hand_size = STANDARD_HAND_SIZE[self.num_players]
         self.players = ["Alice", "Bob", "Cathy", "Donald", "Emily"][:self.num_players]
+
         
         # dynamic game state
         self.progress = self.num_players * self.hand_size     # index of next card to be drawn
@@ -70,9 +73,13 @@ class GameState():
         self.turn = (self.turn + 1) % self.num_players
         if self.progress == self.deck_size:
             self.remaining_extra_turns -= 1
+        if self.debug:
+            print("Elapsed {} turns, last action was {}. Current board state:\n{} with stacks:{}".format(
+                len(self.actions), self.actions[-1], self.hands, self.stacks
+            ))
 
     def __replace(self, card_idx):
-        idx_in_hand = self.cur_hand.index(self.deck[card_idx])
+        idx_in_hand = next(i for (i, card) in enumerate(self.cur_hand) if card.deck_index == card_idx)
         for i in range(idx_in_hand, self.hand_size - 1):
             self.cur_hand[i] = self.cur_hand[i + 1]
         if self.progress < self.deck_size:
@@ -206,6 +213,9 @@ class GreedyStrategy():
         plays = [cstate for cstate in cur_hand if cstate.card_type == CardType.Playable]
         trash = next((cstate for cstate in cur_hand if cstate.card_type == CardType.Trash), None)
 
+
+        # actual decision on what to do
+
         if len(plays) > 0:
             play = max(plays, key=lambda s: s.weight)
             self.game_state.play(play.card.deck_index)
@@ -241,6 +251,7 @@ def test():
 
 wins = open("won_seeds.txt", "a")
 losses = open("lost_seeds.txt", "a")
+crits = open("crits_lost.txt", "a")
 
 lost = 0
 won = 0
@@ -263,12 +274,12 @@ def run_deck(seed, num_players, deck_str):
 #            wins.write("Seed {:10} {}:\n{}\n".format(seed, str(deck), link(gs.to_json())))
             won += 1
     except ValueError:
-#        losses.write("Seed {} {}lost crit:\n{}\n".format(seed, str(deck), link(gs.to_json())))
+        crits.write("Seed {} {}lost crit:\n{}\n".format(seed, str(deck), link(gs.to_json())))
         crits_lost += 1
 
 if __name__ == "__main__":
     cur = conn.cursor()
-    cur.execute("SELECT seed, num_players, deck FROM seeds WHERE variant_id = 0 AND num_players = 2 limit 1000")
+    cur.execute("SELECT seed, num_players, deck FROM seeds WHERE variant_id = 0 AND num_players = 3 limit 1000")
     print()
     for r in cur:
         run_deck(*r)
