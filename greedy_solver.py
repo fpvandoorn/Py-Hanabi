@@ -17,6 +17,7 @@ class GameState():
         self.deck_size = len(deck)
         self.num_suits = max(map(lambda c: c.suitIndex, deck)) + 1
         self.hand_size = STANDARD_HAND_SIZE[self.num_players]
+        self.players = ["Alice", "Bob", "Cathy", "Donald", "Emily"][:self.num_players]
         
         # dynamic game state
         self.progress = self.num_players * self.hand_size     # index of next card to be drawn
@@ -72,11 +73,23 @@ class GameState():
         self.actions.append(
                 Action(
                     ActionType.RankClue,
-                    target=(self.turn +1) % self.num_players,               # clue next plyaer
-                    value=self.hands[(self.turn +1) % self.num_players][0]  # clue index 0
+                    target=(self.turn +1) % self.num_players,                    # clue next plyaer
+                    value=self.hands[(self.turn +1) % self.num_players][0].rank  # clue index 0
                 )
         )
+        self.clues -= 1
         self.__make_turn()
+
+    def to_json(self):
+        return {
+            "deck": self.deck,
+            "players": self.players,
+            "actions": self.actions,
+            "first_player": 0,
+            "options": {
+                "variant": "No Variant",
+                }
+            }
 
 def test():
     deck_str = 'p5 p3 b4 r5 y4 y4 y5 r4 b2 y2 y3 g5 g2 g3 g4 p4 r3 b2 b3 b3 p4 b1 p2 b1 b1 p2 p1 p1 g1 r4 g1 r1 r3 r1 g1 r1 p1 b4 p3 g2 g3 g4 b5 y1 y1 y1 r2 r2 y2 y3'
