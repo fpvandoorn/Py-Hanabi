@@ -167,13 +167,17 @@ class GreedyStrategy():
         hand_states = [[CardState(self.game_state.card_type(card), card, None) for card in self.game_state.hands[p]] for p in range(self.game_state.num_players)]
 
         # find dupes in players hands, marke one card crit and the other one trash
+        p = False
         for states in hand_states:
             counter = collections.Counter(map(lambda state: state.card, states))
             for card in counter:
                 if counter[card] >= 2:
-                    state = next(cstate for cstate in states if cstate.card == card)
-                    dupes_present = True
-                    state.card_type = CardType.Trash
+                    dupes = (cstate for cstate in states if cstate.card == card)
+                    first = next(dupes)
+                    if first.card_type == CardType.Dispensable:
+                        first.card_type = CardType.Critical
+                    for dupe in dupes:
+                        dupe.card_type = CardType.Trash
 
         for (player, states) in enumerate(hand_states):
             for state in states:
@@ -196,6 +200,8 @@ class GreedyStrategy():
                         nextCopy = 1
 #                    state.weight = self.suit_badness[state.card.suitIndex] * nextCopy + 2 * (5 - state.card.rank)
                     state.weight = nextCopy + 2 * (5 - state.card.rank)
+
+
         cur_hand = hand_states[self.game_state.turn]
         plays = [cstate for cstate in cur_hand if cstate.card_type == CardType.Playable]
         trash = next((cstate for cstate in cur_hand if cstate.card_type == CardType.Trash), None)
@@ -268,3 +274,4 @@ if __name__ == "__main__":
         run_deck(*r)
         print("won: {:4}, lost: {:4}, crits lost: {:3}".format(won, lost, crits_lost), end = "\r")
     print()
+    print("Total wins: {}%".format(round(100 * won / (lost + won + crits_lost), 2)))
