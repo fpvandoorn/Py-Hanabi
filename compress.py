@@ -37,7 +37,7 @@ class ActionType(Enum):
     ColorClue = 2
     RankClue = 3
     EndGame = 4
-    VoteTerminate = 5
+    VoteTerminate = 5 ## hack: online, this is encoded as a 10
 
 
 class Action():
@@ -71,7 +71,7 @@ class Action():
         return "Undefined action"
 
 
-def compress_actions(actions: List[Action]) -> str:
+def compress_actions(actions: List[Action], game_id=None) -> str:
     minType = 0
     maxType = 0
     if len(actions) != 0:
@@ -82,6 +82,10 @@ def compress_actions(actions: List[Action]) -> str:
         ## We encode action values with +1 to differentiate 
         # null (encoded 0) and 0 (encoded 1)
         value = 0 if action.value is None else action.value + 1
+        if action.type == ActionType.VoteTerminate:
+            value = 0
+            with open('vote_terminate_actions.txt', 'a') as f:
+                f.write('target: {}, value: {}, game_id: {}\n'.format(action.target, action.value, game_id))
         a = BASE62[typeRange * value + (action.type.value - minType)]
         b = BASE62[action.target] 
         return a + b
