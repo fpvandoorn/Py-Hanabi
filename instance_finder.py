@@ -9,10 +9,10 @@ from alive_progress import alive_bar
 from compress import decompress_deck
 import concurrent.futures
 from threading import Lock
-from time import sleep
+from time import sleep, perf_counter
 
 
-MAX_PROCESSES=6
+MAX_PROCESSES=4
 
 def update_seeds_db():
     cur2 = conn.cursor()
@@ -71,7 +71,7 @@ def update_trivially_feasible_games():
                         valid = not any([a,b,c,d])
                         print('  Game {} already in database, valid: {}'.format(game_id, valid))
                     if valid:
-                        print('Seed {:9} (variant {} / {}) found to be feasible via game {:6}'.format(seed, var['id'], var['name'], game_id))
+                        print('Seed {:10} (variant {} / {}) found to be feasible via game {:6}'.format(seed, var['id'], var['name'], game_id))
                         cur.execute("UPDATE seeds SET feasible = (%s) WHERE seed = (%s)", (True, seed))
                         conn.commit()
                         break
@@ -104,9 +104,12 @@ def get_decks_for_all_seeds():
 
 mutex = Lock()
 
-def solve_seed(seed, num_players, deck_compressed):
+def solve_seed(seed, num_players, deck_compressed, var_id):
     deck = decompress_deck(deck_compressed)
+    t0 = perf_counter()
     solvable, solution = solve(deck, num_players)
+    t1 = perf_counter()
+    print("Solved instance {} in {} seconds".format(seed, round(t1-t0, 2)))
 
     mutex.acquire()
     lcur = conn.cursor()
@@ -114,8 +117,8 @@ def solve_seed(seed, num_players, deck_compressed):
     conn.commit()
 
     if not solvable:
-        with open('unsolvable_seeds', 'a') as f:
-            f.write('{}-player, seed {}\n'.format(num_players, seed))
+        with open('infeasible_instances.txt', 'a') as f:
+            f.write('{}-player, seed {:10}, {}\n'.format(num_players, seed, variant_name(var_id)))
 #        print('Seed {} ({} players) not solvable: {}'.format(seed, num_players, deck))
 
     mutex.release()
@@ -124,11 +127,11 @@ def solve_seed(seed, num_players, deck_compressed):
 def solve_unknown_seeds():
     cur = conn.cursor()
     for var in VARIANTS:
-        cur.execute("SELECT seed, num_players, deck FROM seeds WHERE variant_id = (%s) AND feasible IS NULL AND deck IS NOT NULL ORDER BY num_players DESC", (var['id'],))
+        cur.execute("SELECT seed, num_players, deck FROM seeds WHERE variant_id = (%s) AND feasible IS NULL AND deck IS NOT NULL AND num_players != 2 ORDER BY num_players DESC", (var['id'],))
         res = cur.fetchall()
 
-        with concurrent.futures.ProcessPoolExecutor(max_workers=MAX_PROCESSES) as executor:
-            fs = [executor.submit(solve_seed, *r) for r in res]
+        with concurrent.futures.ProcessPoolExecutor(max_workers=1) as executor:
+            fs = [executor.submit(solve_seed, r[0], r[1], r[2], var['id']) for r in res]
             with alive_bar(len(res), title='Seed solving on {}'.format(var['name'])) as bar:
                 for f in concurrent.futures.as_completed(fs):
                     bar()
