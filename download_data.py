@@ -40,7 +40,7 @@ def export_game(game_id) -> [bool, bool]:
     with conn.cursor() as cur:
         cur.execute("UPDATE seeds SET deck=(%s) WHERE seed=(%s);", (deck, r['seed']))
     try:
-        actions = compress_actions([Action.from_json(a) for a in r['actions']])
+        actions = compress_actions([Action.from_json(a) for a in r['actions']], r['id'])
     except:
         print("Unknown action while exporting game id {}".format(game_id))
         raise
