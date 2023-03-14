@@ -16,9 +16,10 @@ def chunks(s: str, n: int):
 
 
 class DeckCard():
-    def __init__(self, suitIndex: int, rank: int):
+    def __init__(self, suitIndex: int, rank: int, deck_index=None):
         self.suitIndex: int = suitIndex
         self.rank: int = rank
+        self.deck_index = deck_index
 
     @staticmethod
     def from_json(deck_card):
@@ -29,6 +30,10 @@ class DeckCard():
 
     def __repr__(self):
         return COLORS[self.suitIndex] + str(self.rank)
+
+    def __hash__(self):
+        # should be injective enough, we never use cards with ranks differing by 1000
+        return 1000 * self.suitIndex + self.rank
 
 
 class ActionType(Enum):
@@ -197,3 +202,4 @@ def decompressJSONGame(game_str: str)->dict:
 def link(game_json: dict) -> str:
     compressed = compressJSONGame(game_json)
     return "https://hanab.live/replay-json/{}".format(compressed)
+
