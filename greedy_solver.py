@@ -1,4 +1,4 @@
-# import numpy as np
+import collections
 from compress import DeckCard, Action, ActionType, link, decompress_deck
 from enum import Enum
 from database import conn
@@ -165,6 +165,16 @@ class GreedyStrategy():
 
     def make_move(self):
         hand_states = [[CardState(self.game_state.card_type(card), card, None) for card in self.game_state.hands[p]] for p in range(self.game_state.num_players)]
+
+        # find dupes in players hands, marke one card crit and the other one trash
+        for states in hand_states:
+            counter = collections.Counter(map(lambda state: state.card, states))
+            for card in counter:
+                if counter[card] >= 2:
+                    state = next(cstate for cstate in states if cstate.card == card)
+                    dupes_present = True
+                    state.card_type = CardType.Trash
+
         for (player, states) in enumerate(hand_states):
             for state in states:
                 if state.card_type == CardType.Playable:
@@ -184,7 +194,8 @@ class GreedyStrategy():
                         nextCopy = self.game_state.deck[self.game_state.progress:].index(card)
                     except:
                         nextCopy = 1
-                    state.weight = self.suit_badness[state.card.suitIndex] * nextCopy + 2 * (5 - state.card.rank)
+#                    state.weight = self.suit_badness[state.card.suitIndex] * nextCopy + 2 * (5 - state.card.rank)
+                    state.weight = nextCopy + 2 * (5 - state.card.rank)
         cur_hand = hand_states[self.game_state.turn]
         plays = [cstate for cstate in cur_hand if cstate.card_type == CardType.Playable]
         trash = next((cstate for cstate in cur_hand if cstate.card_type == CardType.Trash), None)
@@ -240,7 +251,7 @@ def run_deck(seed, num_players, deck_str):
         while not gs.is_over():
             strat.make_move()
         if not gs.score() == 25:
-#            losses.write("Seed {:10} {}:\n{}\n".format(seed, str(deck), link(gs.to_json())))
+            losses.write("Seed {:10} {}:\n{}\n".format(seed, str(deck), link(gs.to_json())))
             lost += 1
         else:
 #            wins.write("Seed {:10} {}:\n{}\n".format(seed, str(deck), link(gs.to_json())))
@@ -251,8 +262,9 @@ def run_deck(seed, num_players, deck_str):
 
 if __name__ == "__main__":
     cur = conn.cursor()
-    cur.execute("SELECT seed, num_players, deck FROM seeds WHERE variant_id = 0 AND num_players = 2")
+    cur.execute("SELECT seed, num_players, deck FROM seeds WHERE variant_id = 0 AND num_players = 2 limit 1000")
     print()
     for r in cur:
         run_deck(*r)
         print("won: {:4}, lost: {:4}, crits lost: {:3}".format(won, lost, crits_lost), end = "\r")
+    print()
