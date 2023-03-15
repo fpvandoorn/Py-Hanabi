@@ -146,7 +146,7 @@ class Literals():
         self.incr_clues = {m: Symbol('m{}c+'.format(m)) for m in range(self.max_moves)}
 
 
-def solve(game_state: GameState):
+def solve_sat(game_state: GameState):
     ls = Literals(game_state.num_players, game_state.num_suits, game_state.num_dark_suits)
 
     ##### setup of initial game state
@@ -330,7 +330,7 @@ def print_model(model, cur_game_state, ls: Literals):
         print(', '.join(f for f in flags if model.get_py_value(getattr(ls, f)[m])))
 
 
-def toJSON(model, cur_game_state: GameState, ls: Literals) -> dict:
+def toJSON(model, cur_game_state: GameState, ls: Literals) -> GameState:
     for m in range(len(cur_game_state.actions), ls.max_moves):
         if model.get_py_value(ls.dummyturn[m]):
             break
@@ -343,10 +343,10 @@ def toJSON(model, cur_game_state: GameState, ls: Literals) -> dict:
         else:
             cur_game_state.clue()
 
-    return cur_game_state.to_json()
+    return cur_game_state
 
 def run_deck():
-    puzzle = True
+    puzzle = False
     if puzzle:
         deck_str = 'p5 p3 b4 r5 y4 y4 y5 r4 b2 y2 y3 g5 g2 g3 g4 p4 r3 b2 b3 b3 p4 b1 p2 b1 b1 p2 p1 p1 g1 r4 g1 r1 r3 r1 g1 r1 p1 b4 p3 g2 g3 g4 b5 y1 y1 y1 r2 r2 y2 y3'
 
@@ -354,26 +354,25 @@ def run_deck():
         num_p = 5
     else:
         deck_str = "15gfvqluvuwaqnmrkpkaignlaxpjbmsprksfcddeybfixchuhtwo"
+        deck_str = "15diuknfwhqbplsrlkxjuvfbwyacoaxgtudcerskqfnhpgampmiv"
+        deck_str = "15jdxlpobvikrnhkslcuwggimtphafquqfvcwadampxkeyfrbnsu"
         deck = decompress_deck(deck_str)
-        num_p = 4
+        num_p = 6
 
     print(deck)
 
     gs = GameState(num_p, deck)
     if puzzle:
         gs.play(2)
-        pass
     else:
         strat = GreedyStrategy(gs)
-        for _ in range(18):
+        for _ in range(17):
             strat.make_move()
-        print(link(gs.to_json()))
 
-
-    solvable, sol = solve(gs)
+    solvable, sol = solve_sat(gs)
     if solvable:
         print(sol)
-        print(link(sol))
+        print(link(sol.to_json()))
     else:
         print('unsolvable')
 
