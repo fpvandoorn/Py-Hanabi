@@ -4,3 +4,11 @@ hanab.live
 venv/
 # pycache dir
 __pycache__
+
+
+# a few output files
+log.txt
+remaining_cards.txt
+lost_seeds.txt
+utils.py
+infeasible_instances.txt
