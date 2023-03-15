@@ -46,7 +46,9 @@ class GameState():
             card.deck_index = idx
         self.deck_size = len(deck)
         self.num_suits = max(map(lambda c: c.suitIndex, deck)) + 1
+        self.num_dark_suits = (len(deck) - 10 * self.num_suits) // (-5)
         self.hand_size = STANDARD_HAND_SIZE[self.num_players]
+        self.num_strikes = 3
         self.players = ["Alice", "Bob", "Cathy", "Donald", "Emily"][:self.num_players]
 
         
@@ -79,7 +81,8 @@ class GameState():
             ))
 
     def __replace(self, card_idx):
-        idx_in_hand = next(i for (i, card) in enumerate(self.cur_hand) if card.deck_index == card_idx)
+        idx_in_hand = next((i for (i, card) in enumerate(self.cur_hand) if card.deck_index == card_idx), None)
+        assert(idx_in_hand is not None)
         for i in range(idx_in_hand, self.hand_size - 1):
             self.cur_hand[i] = self.cur_hand[i + 1]
         if self.progress < self.deck_size:
@@ -94,6 +97,7 @@ class GameState():
                 self.clues += 1
         else:
             self.strikes += 1
+            assert (self.strikes < self.num_strikes)
             self.trash.append(self.deck[card_idx])
         self.actions.append(Action(ActionType.Play, target=card_idx))
         self.__replace(card_idx)
@@ -279,7 +283,7 @@ def run_deck(seed, num_players, deck_str):
 
 if __name__ == "__main__":
     cur = conn.cursor()
-    cur.execute("SELECT seed, num_players, deck FROM seeds WHERE variant_id = 0 AND num_players = 3 limit 1000")
+    cur.execute("SELECT seed, num_players, deck FROM seeds WHERE variant_id = 0 AND num_players = 2 limit 1000")
     print()
     for r in cur:
         run_deck(*r)
