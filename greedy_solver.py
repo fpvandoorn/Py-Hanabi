@@ -49,8 +49,10 @@ class GameState():
         self.num_dark_suits = (len(deck) - 10 * self.num_suits) // (-5)
         self.hand_size = STANDARD_HAND_SIZE[self.num_players]
         self.num_strikes = 3
-        self.players = ["Alice", "Bob", "Cathy", "Donald", "Emily"][:self.num_players]
+        self.players = ["Alice", "Bob", "Cathy", "Donald", "Emily", "Frank"][:self.num_players]
 
+        # can be set to true if game is known to be in a lost state
+        self.in_lost_state = False
         
         # dynamic game state
         self.progress = self.num_players * self.hand_size     # index of next card to be drawn
@@ -147,15 +149,23 @@ class GameState():
             return CardType.Dispensable
 
     def is_over(self):
-        return all(s == 5 for s in self.stacks) or self.remaining_extra_turns == 0
+        return all(s == 5 for s in self.stacks) or (self.remaining_extra_turns == 0)
+
 
     def holding_players(self, card):
         for (player, hand) in enumerate(self.hands):
             if card in hand:
                 yield player
 
+    @property
     def score(self):
         return sum(self.stacks)
+
+    def is_won(self):
+        return self.score == 5 * self.num_suits
+
+    def is_known_lost(self):
+        return self.in_lost_state
 
 class GreedyStrategy():
     def __init__(self, game_state: GameState):
@@ -200,7 +210,7 @@ class GreedyStrategy():
                         state.weight = (3 if len(connecting_holders) > 0 else 1) * state.card.rank
                     else:
                         # TODO
-                        state.weight = 0.5 * state.card.rank
+                        state.weight = 0.5 * (5 - state.card.rank)
                 elif state.card_type == CardType.Dispensable:
                     try:
                         # TODO: consider duplicate in hand
@@ -230,7 +240,8 @@ class GreedyStrategy():
         elif self.game_state.clues == 0:
             dispensable = [cstate for cstate in cur_hand if cstate.card_type == CardType.Dispensable]
             if len(dispensable) == 0:
-                raise ValueError("Lost critical card")
+                self.game_state.in_lost_state = True
+#                raise ValueError("Lost critical card")
             else:
                 discard = min(dispensable, key=lambda s: s.weight)
                 self.game_state.discard(discard.card.deck_index)
@@ -283,7 +294,7 @@ def run_deck(seed, num_players, deck_str):
 
 if __name__ == "__main__":
     cur = conn.cursor()
-    cur.execute("SELECT seed, num_players, deck FROM seeds WHERE variant_id = 0 AND num_players = 2 limit 1000")
+    cur.execute("SELECT seed, num_players, deck FROM seeds WHERE variant_id = 0 AND num_players = 5 limit 1000")
     print()
     for r in cur:
         run_deck(*r)
