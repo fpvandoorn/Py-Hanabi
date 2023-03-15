@@ -1,15 +1,16 @@
 import json
-from time import sleep
 from site_api import get, api, replay
-from sat import COLORS, solve
+from sat import COLORS, solve_sat
 from database import Game, store, load, commit, conn
 from download_data import export_game
-from variants import num_suits, VARIANTS
+from variants import num_suits, VARIANTS, variant_name
 from alive_progress import alive_bar
-from compress import decompress_deck
+from compress import decompress_deck, link
 import concurrent.futures
 from threading import Lock
 from time import sleep, perf_counter
+from greedy_solver import GameState, GreedyStrategy
+from logger_setup import logger
 
 
 MAX_PROCESSES=4
@@ -104,22 +105,55 @@ def get_decks_for_all_seeds():
 
 mutex = Lock()
 
+def solve_instance(num_players, deck):
+    for num_remaining_cards in [0, 5, 10, 20, 30]:
+#        print("trying with {} greedy moves".format(num_greedy_moves))
+        game = GameState(num_players, deck)
+        strat = GreedyStrategy(game)
+
+        # make a number of greedy moves
+        while not game.is_over() and not game.is_known_lost():
+            if num_remaining_cards != 0 and game.progress == game.deck_size - num_remaining_cards:
+                break # stop solution here
+            strat.make_move()
+        
+        # check if we won already
+        if game.is_won():
+#            print("won with greedy strat")
+            return True, game, num_remaining_cards
+
+        # now, apply sat solver
+        if not game.is_over():
+            solvable, sol = solve_sat(game)
+            if solvable:
+                return solvable, sol, num_remaining_cards
+        logger.info("No success, reducing number of greedy moves, failed attempt was: {}".format(link(game.to_json())))
+#    print("Aborting trying with greedy strat")
+    logger.info("Starting full SAT solver")
+    game = GameState(num_players, deck)
+    a, b = solve_sat(game)
+    return a, b, 99
+
+
 def solve_seed(seed, num_players, deck_compressed, var_id):
     deck = decompress_deck(deck_compressed)
     t0 = perf_counter()
-    solvable, solution = solve(deck, num_players)
+    solvable, solution, num_remaining_cards = solve_instance(num_players, deck)
     t1 = perf_counter()
-    print("Solved instance {} in {} seconds".format(seed, round(t1-t0, 2)))
+    logger.info("Solved instance {} in {} seconds".format(seed, round(t1-t0, 2)))
 
     mutex.acquire()
     lcur = conn.cursor()
     lcur.execute("UPDATE seeds SET feasible = (%s) WHERE seed = (%s)", (solvable, seed))
     conn.commit()
+    if solvable:
+        with open("remaining_cards.txt", "a") as f:
+            f.write("Success with {} cards left in draw by greedy solver on seed {}: {}\n".format(num_remaining_cards, seed ,link(solution.to_json())))
 
     if not solvable:
+        logger.info("seed {} was not solvable".format(seed))
         with open('infeasible_instances.txt', 'a') as f:
             f.write('{}-player, seed {:10}, {}\n'.format(num_players, seed, variant_name(var_id)))
-#        print('Seed {} ({} players) not solvable: {}'.format(seed, num_players, deck))
 
     mutex.release()
 
@@ -127,10 +161,10 @@ def solve_seed(seed, num_players, deck_compressed, var_id):
 def solve_unknown_seeds():
     cur = conn.cursor()
     for var in VARIANTS:
-        cur.execute("SELECT seed, num_players, deck FROM seeds WHERE variant_id = (%s) AND feasible IS NULL AND deck IS NOT NULL AND num_players != 2 ORDER BY num_players DESC", (var['id'],))
+        cur.execute("SELECT seed, num_players, deck FROM seeds WHERE variant_id = (%s) AND feasible IS NULL AND deck IS NOT NULL", (var['id'],))
         res = cur.fetchall()
 
-        with concurrent.futures.ProcessPoolExecutor(max_workers=1) as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=MAX_PROCESSES) as executor:
             fs = [executor.submit(solve_seed, r[0], r[1], r[2], var['id']) for r in res]
             with alive_bar(len(res), title='Seed solving on {}'.format(var['name'])) as bar:
                 for f in concurrent.futures.as_completed(fs):
@@ -139,30 +173,3 @@ def solve_unknown_seeds():
 
 
 solve_unknown_seeds()
-exit(0)
-
-
-print('looked at {} games'.format(num_games))
-for i in range(2,7):
-    print("Found {} seeds in {}-player in database".format(len(seeds[i]), i))
-
-hard_seeds = []
-for seed in seeds[3]:
-    if not known_solvable(seed):
-#        print("seed {} has no solve in online database".format(seed))
-        hard_seeds.append(seed)
-print("Found {} seeds with no solve in database, attacking each with SAT solver"
-      .format(len(hard_seeds)))
-
-for seed in hard_seeds:
-    r = replay(seed)
-    if not r:
-        continue
-    s, sol = solvable(r)
-    if s:
-        print("Seed {} was found to be solvable".format(seed))
-#        print(sol)
-    else:
-        print("==============================")
-        print("Found non-solvable seed {}", seed)
-        print("==============================")
