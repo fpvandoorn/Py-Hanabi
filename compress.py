@@ -203,3 +203,10 @@ def link(game_json: dict) -> str:
     compressed = compressJSONGame(game_json)
     return "https://hanab.live/replay-json/{}".format(compressed)
 
+if __name__ == "__main__":
+    deck_str = "15shareutrkcydvpxxudafpwcpmnkiuijnbhfmowbfaqggqklvsl"
+    deck_str = "15mfqsfrjfeixvhkhtaplakrcpnxlwdyqnwsmovdagkgpiuubcub"
+    deck_str = "15utfaladkwvgrsdwfpqrkouvxiaismnujcxpmgpqckyfelnhhbb"
+    deck_str = "15vxsmoiybhkgamdagwcsbeuqpwdarfhukfvifnutxjcknrqppll"
+    deck = decompress_deck(deck_str)
+    print(deck)
