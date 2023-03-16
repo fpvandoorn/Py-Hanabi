@@ -1,8 +1,10 @@
+#! /bin/python3
 import collections
 from compress import DeckCard, Action, ActionType, link, decompress_deck
 from enum import Enum
 from database import conn
 from time import sleep
+import sys
 
 
 COLORS = 'rygbp'
@@ -149,7 +151,7 @@ class GameState():
             return CardType.Dispensable
 
     def is_over(self):
-        return all(s == 5 for s in self.stacks) or (self.remaining_extra_turns == 0)
+        return all(s == 5 for s in self.stacks) or (self.remaining_extra_turns == 0) or (self.is_known_lost())
 
 
     def holding_players(self, card):
@@ -200,17 +202,42 @@ class GreedyStrategy():
                     for dupe in dupes:
                         dupe.card_type = CardType.Trash
 
+        def hand_badness(states):
+            if any(state.card_type == CardType.Playable for state in states):
+                return 0
+            crits = [state for state in states if state.card_type == CardType.Critical]
+            crits_val = sum(map(lambda state: state.card.rank, crits))
+            if any(state.card_type == CardType.Playable for state in states):
+                return crits_val
+        
+        def player_distance(f, t):
+            return ((t - f - 1) % self.game_state.num_players) + 1
+
         for (player, states) in enumerate(hand_states):
             for state in states:
                 if state.card_type == CardType.Playable:
-                    copy_holders = list(self.game_state.holding_players(state.card))
+                    copy_holders = set(self.game_state.holding_players(state.card))
                     copy_holders.remove(player)
-                    connecting_holders = list(self.game_state.holding_players(DeckCard(state.card.suitIndex, state.card.rank + 1)))
+                    connecting_holders = set(self.game_state.holding_players(DeckCard(state.card.suitIndex, state.card.rank + 1)))
+
                     if len(copy_holders) == 0:
-                        state.weight = (3 if len(connecting_holders) > 0 else 1) * state.card.rank
+                        # card is unique, imortancy is based lexicographically on whether somebody has the conn. card and the rank
+                        state.weight = (6 if len(connecting_holders) > 0 else 1) * (6 - state.card.rank)
                     else:
-                        # TODO
-                        state.weight = 0.5 * (5 - state.card.rank)
+                        # copy is available somewhere else
+                        if len(connecting_holders) == 0:
+                            # card is not urgent
+                            state.weight = 0.5 * (6 - state.card.rank)
+                        else:
+                            # there is a copy and there is a connecting card. check if they are out of order
+                            turns_to_copy = min(map(lambda holder: player_distance(player, holder), copy_holders))
+                            turns_to_conn = max(map(lambda holder: player_distance(player, holder), connecting_holders))
+                            if turns_to_copy < turns_to_conn:
+                                # our copy is not neccessary for connecting card to be able to play
+                                state.weight = 0.5 * (6 - state.card.rank)
+                            else:
+                                # our copy is important, scale it little less than if it were unique
+                                state.weight = 4 * (6 - state.card.rank)
                 elif state.card_type == CardType.Dispensable:
                     try:
                         # TODO: consider duplicate in hand
@@ -279,25 +306,24 @@ def run_deck(seed, num_players, deck_str):
     deck = decompress_deck(deck_str)
     gs = GameState(num_players, deck)
     strat = GreedyStrategy(gs)
-    try:
-        while not gs.is_over():
-            strat.make_move()
-        if not gs.score() == 25:
-            losses.write("Seed {:10} {}:\n{}\n".format(seed, str(deck), link(gs.to_json())))
-            lost += 1
-        else:
-#            wins.write("Seed {:10} {}:\n{}\n".format(seed, str(deck), link(gs.to_json())))
-            won += 1
-    except ValueError:
-        crits.write("Seed {} {}lost crit:\n{}\n".format(seed, str(deck), link(gs.to_json())))
-        crits_lost += 1
+    while not gs.is_over():
+        strat.make_move()
+    if not gs.score == 25:
+        losses.write("Seed {:10} {}:\n{}\n".format(seed, str(deck), link(gs.to_json())))
+        lost += 1
+    else:
+        won += 1
 
-if __name__ == "__main__":
+def run_samples(num_players, sample_size):
     cur = conn.cursor()
-    cur.execute("SELECT seed, num_players, deck FROM seeds WHERE variant_id = 0 AND num_players = 5 limit 1000")
-    print()
+    cur.execute("SELECT seed, num_players, deck FROM seeds WHERE variant_id = 0 AND num_players = (%s) order by seed desc limit (%s)", (num_players, sample_size))
     for r in cur:
         run_deck(*r)
         print("won: {:4}, lost: {:4}, crits lost: {:3}".format(won, lost, crits_lost), end = "\r")
     print()
     print("Total wins: {}%".format(round(100 * won / (lost + won + crits_lost), 2)))
+
+if __name__ == "__main__":
+    for p in range(2, 6):
+        print("Testing on {} players...".format(p))
+        run_samples(p, sys.argv[1])
