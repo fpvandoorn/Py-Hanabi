@@ -38,6 +38,9 @@ class DeckCard():
         # should be injective enough, we never use cards with ranks differing by 1000
         return 1000 * self.suitIndex + self.rank
 
+    def colorize(self):
+        color = ["green", "blue", "magenta", "yellow", "white", "cyan"][self.suitIndex]
+        return colored(str(self), color)
 
 class ActionType(Enum):
     Play = 0
