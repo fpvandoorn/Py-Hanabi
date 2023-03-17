@@ -1,8 +1,11 @@
+#! /bin/python3
 import json
+import sys
 from enum import Enum
 from typing import List, Optional
 import more_itertools
 from variants import variant_id, variant_name
+from termcolor import colored
 
 
 BASE62 = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -204,9 +207,6 @@ def link(game_json: dict) -> str:
     return "https://hanab.live/replay-json/{}".format(compressed)
 
 if __name__ == "__main__":
-    deck_str = "15shareutrkcydvpxxudafpwcpmnkiuijnbhfmowbfaqggqklvsl"
-    deck_str = "15mfqsfrjfeixvhkhtaplakrcpnxlwdyqnwsmovdagkgpiuubcub"
-    deck_str = "15utfaladkwvgrsdwfpqrkouvxiaismnujcxpmgpqckyfelnhhbb"
-    deck_str = "15vxsmoiybhkgamdagwcsbeuqpwdarfhukfvifnutxjcknrqppll"
-    deck = decompress_deck(deck_str)
-    print(deck)
+    for arg in sys.argv[1:]:
+        deck = decompress_deck(arg)
+        print(deck)
