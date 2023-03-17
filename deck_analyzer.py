@@ -15,6 +15,7 @@ deck = decompress_deck(deck_str)
 class InfeasibilityType(Enum):
     OutOfPace = 0           # idx denotes index of last card drawn before being forced to reduce pace, value denotes how bad pace is
     OutOfHandSize = 1       # idx denotes index of last card drawn before being forced to discard a crit
+    NotTrivial = 2
 
 
 class InfeasibilityReason():
@@ -31,7 +32,8 @@ class InfeasibilityReason():
                 return "Deck runs out of hand size after drawing card {}".format(self.index)
 
 
-def analyze(deck: List[DeckCard], num_players) -> InfeasibilityReason | None:
+
+def analyze(deck: List[DeckCard], num_players, find_non_trivial=False) -> InfeasibilityReason | None:
     num_suits = max(map(lambda c: c.suitIndex, deck)) + 1
     hand_size = STANDARD_HAND_SIZE[num_players]
 
@@ -44,7 +46,7 @@ def analyze(deck: List[DeckCard], num_players) -> InfeasibilityReason | None:
     stored_crits = set()
     min_forced_pace = 100
     worst_index = 0
-    for (i, card) in enumerate(deck[:-2]):
+    for (i, card) in enumerate(deck):
         if card.rank == stacks[card.suitIndex] + 1:
             # card is playable
             stacks[card.suitIndex] += 1
@@ -70,6 +72,9 @@ def analyze(deck: List[DeckCard], num_players) -> InfeasibilityReason | None:
         if len(stored_crits) == num_players * hand_size:
             return InfeasibilityReason(InfeasibilityType.OutOfHandSize, i)
 
+        if find_non_trivial and len(stored_cards) == num_players * hand_size:
+            return InfeasibilityReason(InfeasibilityType.NotTrivial, i)
+
         # the last - 1 is there because we have to discard 'next', causing a further draw
         max_remaining_plays = (len(deck) - i - 1) + num_players - 1
 
@@ -79,6 +84,12 @@ def analyze(deck: List[DeckCard], num_players) -> InfeasibilityReason | None:
 #            print("update to {}: {}".format(i, missing))
             min_forced_pace = missing
             worst_index = i
+
+    # check that we correctly walked through the deck
+    assert(len(stored_cards) == 0)
+    assert(len(stored_crits) == 0)
+    assert(sum(stacks) == 5 * num_suits)
+
     if min_forced_pace < 0: 
         return InfeasibilityReason(InfeasibilityType.OutOfPace, worst_index, min_forced_pace)
     else:
@@ -88,20 +99,42 @@ def analyze(deck: List[DeckCard], num_players) -> InfeasibilityReason | None:
 def run_on_database():
     cur = conn.cursor()
     cur2 = conn.cursor()
-    cur.execute("SELECT seed, num_players, deck from seeds where variant_id = 0 order by num_players desc")
-    res = cur.fetchall()
-    for (seed, num_players, deck) in res:
-        deck = decompress_deck(deck)
-        a = analyze(deck, num_players)
-        if type(a) == InfeasibilityReason:
-            if a.type == InfeasibilityType.OutOfHandSize:
-                print("Seed {} infeasible: {}\n{}".format(seed, a, deck))
+    for num_p in range(2, 6):
+        cur.execute("SELECT seed, num_players, deck from seeds where variant_id = 0 and num_players = (%s) order by seed asc", (num_p,))
+        res = cur.fetchall()
+        hand = 0
+        pace = 0
+        non_trivial = 0
+        d = None
+        print("Checking {} {}-player seeds from database".format(len(res), num_p))
+        for (seed, num_players, deck) in res:
+            deck = decompress_deck(deck)
+            a = analyze(deck, num_players, True)
+            if type(a) == InfeasibilityReason:
+                if a.type == InfeasibilityType.OutOfHandSize:
+    #                print("Seed {} infeasible: {}\n{}".format(seed, a, deck))
+                    hand += 1
+                elif a.type == InfeasibilityType.OutOfPace:
+                    pace += 1
+                elif a.type == InfeasibilityType.NotTrivial:
+                    non_trivial += 1
+                    d = seed, deck
+
+        print("Found {} seeds running out of hand size, {} running out of pace and {} that are not trivial".format(hand, pace, non_trivial))
+        if d is not None:
+            print("example non-trivial deck (seed {}): [{}]"
+                  .format(
+                      d[0],
+                      ", ".join(c.colorize() for c in d[1])
+                      )
+                  )
+        print()
 #        if p < 0:
 #            print("seed {} ({} players) runs out of pace ({}) after drawing {}: {}:\n{}".format(seed, num_players, p, i, deck[i], deck))
 #            cur.execute("UPDATE seeds SET feasible = f WHERE seed = (%s)", seed)
 
 if __name__ == "__main__":
-    print(deck)
-    a = analyze(deck, 4)
-    print(a)
+#    print(deck)
+#    a = analyze(deck, 4)
+#    print(a)
     run_on_database()
