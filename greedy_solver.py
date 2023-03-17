@@ -129,6 +129,13 @@ class GameState():
         self.__make_turn()
 
     def to_json(self):
+        # ensure we have at least one action
+        if len(self.actions) == 0:
+            self.actions.append(Action(
+                ActionType.EndGame,
+                target: 0
+                )
+            )
         return {
             "deck": self.deck,
             "players": self.players,
@@ -295,33 +302,33 @@ wins = open("won_seeds.txt", "a")
 losses = open("lost_seeds.txt", "a")
 crits = open("crits_lost.txt", "a")
 
-lost = 0
-won = 0
-crits_lost = 0
 
 def run_deck(seed, num_players, deck_str):
-    global lost
-    global won
-    global crits_lost
     deck = decompress_deck(deck_str)
     gs = GameState(num_players, deck)
     strat = GreedyStrategy(gs)
     while not gs.is_over():
         strat.make_move()
     if not gs.score == 25:
-        losses.write("Seed {:10} {}:\n{}\n".format(seed, str(deck), link(gs.to_json())))
-        lost += 1
-    else:
-        won += 1
+        losses.write("{}-player seed {:10} {}:\n{}\n".format(num_players, seed, str(deck), link(gs.to_json())))
+        return False
+    return True
+
 
 def run_samples(num_players, sample_size):
+    won = 0
+    lost = 0
     cur = conn.cursor()
     cur.execute("SELECT seed, num_players, deck FROM seeds WHERE variant_id = 0 AND num_players = (%s) order by seed desc limit (%s)", (num_players, sample_size))
     for r in cur:
-        run_deck(*r)
-        print("won: {:4}, lost: {:4}, crits lost: {:3}".format(won, lost, crits_lost), end = "\r")
+        succ = run_deck(*r)
+        if succ:
+            won += 1
+        else:
+            lost += 1
+        print("won: {:4}, lost: {:4}".format(won, lost), end = "\r")
     print()
-    print("Total wins: {}%".format(round(100 * won / (lost + won + crits_lost), 2)))
+    print("Total wins: {}%".format(round(100 * won / (lost + won), 2)))
 
 if __name__ == "__main__":
     for p in range(2, 6):
