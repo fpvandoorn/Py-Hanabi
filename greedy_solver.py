@@ -1,15 +1,13 @@
 #! /bin/python3
 import collections
-from compress import DeckCard, Action, ActionType, link, decompress_deck
-from enum import Enum
-from database import conn
-from time import sleep
 import sys
+from enum import Enum
+from time import sleep
 
+from hanabi import DeckCard, Action, ActionType, GameState, HanabiInstance
+from compress import link, decompress_deck
+from database import conn
 
-COLORS = 'rygbp'
-STANDARD_HAND_SIZE = {2: 5, 3: 5, 4: 4, 5: 4, 6: 3}
-NUM_STRIKES_TO_LOSE = 3
 
 class CardType(Enum):
     Trash = 0
@@ -35,153 +33,25 @@ class CardState():
             case CardType.Dispensable:
                 return "Dispensable ({}) with weight {}".format(self.card, self.weight)
 
+# TODO
+def card_type(game_state, card):
+    played = game_state.stacks[card.suitIndex]
+    if card.rank <= played:
+        return CardType.Trash
+    elif card.rank == played + 1:
+        return CardType.Playable
+    elif card.rank == 5 or card in game_state.trash:
+        return CardType.Critical
+    else:
+        return CardType.Dispensable
 
-class GameState():
-    def __init__(self, num_players, deck, debug=False):
-        assert ( 2 <= num_players <= 6)
-
-        self.debug = debug
-
-        self.num_players = num_players
-        self.deck = deck
-        for (idx, card) in enumerate(self.deck):
-            card.deck_index = idx
-        self.deck_size = len(deck)
-        self.num_suits = max(map(lambda c: c.suitIndex, deck)) + 1
-        self.num_dark_suits = (len(deck) - 10 * self.num_suits) // (-5)
-        self.hand_size = STANDARD_HAND_SIZE[self.num_players]
-        self.num_strikes = 3
-        self.players = ["Alice", "Bob", "Cathy", "Donald", "Emily", "Frank"][:self.num_players]
-
-        # can be set to true if game is known to be in a lost state
-        self.in_lost_state = False
-        
-        # dynamic game state
-        self.progress = self.num_players * self.hand_size     # index of next card to be drawn
-        self.hands = [deck[self.hand_size * p : self.hand_size * (p+1)] for p in range(0, num_players)]
-        self.stacks = [0 for i in range(0, self.num_suits)]
-        self.strikes = 0
-        self.clues = 8
-        self.turn = 0
-        self.pace = self.deck_size - 5 * self.num_suits  - self.num_players * (self.hand_size - 1)
-        self.remaining_extra_turns = self.num_players + 1
-        self.trash = []
-
-        # will track replay as game progresses
-        self.actions = []
-
-    @property
-    def cur_hand(self):
-        return self.hands[self.turn]
-
-    def __make_turn(self):
-        assert(self.remaining_extra_turns > 0)
-        self.turn = (self.turn + 1) % self.num_players
-        if self.progress == self.deck_size:
-            self.remaining_extra_turns -= 1
-        if self.debug:
-            print("Elapsed {} turns, last action was {}. Current board state:\n{} with stacks:{}".format(
-                len(self.actions), self.actions[-1], self.hands, self.stacks
-            ))
-
-    def __replace(self, card_idx):
-        idx_in_hand = next((i for (i, card) in enumerate(self.cur_hand) if card.deck_index == card_idx), None)
-        assert(idx_in_hand is not None)
-        for i in range(idx_in_hand, self.hand_size - 1):
-            self.cur_hand[i] = self.cur_hand[i + 1]
-        if self.progress < self.deck_size:
-            self.cur_hand[self.hand_size - 1] = self.deck[self.progress]
-            self.progress += 1
-
-    def play(self, card_idx):
-        card = self.deck[card_idx]
-        if card.rank == self.stacks[card.suitIndex] + 1:
-            self.stacks[card.suitIndex] += 1
-            if card.rank == 5 and self.clues != 8:
-                self.clues += 1
-        else:
-            self.strikes += 1
-            assert (self.strikes < self.num_strikes)
-            self.trash.append(self.deck[card_idx])
-        self.actions.append(Action(ActionType.Play, target=card_idx))
-        self.__replace(card_idx)
-        self.__make_turn()
-
-    def discard(self, card_idx):
-        assert(self.clues < 8)
-        self.actions.append(Action(ActionType.Discard, target=card_idx))
-        self.clues += 1
-        self.pace -= 1
-        self.trash.append(self.deck[card_idx])
-        self.__replace(card_idx)
-        self.__make_turn()
-
-    def clue(self):
-        assert(self.clues > 0)
-        self.actions.append(
-                Action(
-                    ActionType.RankClue,
-                    target=(self.turn +1) % self.num_players,                    # clue next plyaer
-                    value=self.hands[(self.turn +1) % self.num_players][0].rank  # clue index 0
-                )
-        )
-        self.clues -= 1
-        self.__make_turn()
-
-    def to_json(self):
-        # ensure we have at least one action
-        if len(self.actions) == 0:
-            self.actions.append(Action(
-                ActionType.EndGame,
-                target: 0
-                )
-            )
-        return {
-            "deck": self.deck,
-            "players": self.players,
-            "actions": self.actions,
-            "first_player": 0,
-            "options": {
-                "variant": "No Variant",
-                }
-            }
-
-    def card_type(self, card):
-        played = self.stacks[card.suitIndex]
-        if card.rank <= played:
-            return CardType.Trash
-        elif card.rank == played + 1:
-            return CardType.Playable
-        elif card.rank == 5 or card in self.trash:
-            return CardType.Critical
-        else:
-            return CardType.Dispensable
-
-    def is_over(self):
-        return all(s == 5 for s in self.stacks) or (self.remaining_extra_turns == 0) or (self.is_known_lost())
-
-
-    def holding_players(self, card):
-        for (player, hand) in enumerate(self.hands):
-            if card in hand:
-                yield player
-
-    @property
-    def score(self):
-        return sum(self.stacks)
-
-    def is_won(self):
-        return self.score == 5 * self.num_suits
-
-    def is_known_lost(self):
-        return self.in_lost_state
 
 class GreedyStrategy():
     def __init__(self, game_state: GameState):
         self.game_state = game_state
 
         self.earliest_draw_times = []
-        for s in range(0, game_state.num_suits):
+        for s in range(0, game_state.instance.num_suits):
             self.earliest_draw_times.append([])
             for r in range(1, 6):
                 self.earliest_draw_times[s].append(max(
@@ -194,7 +64,7 @@ class GreedyStrategy():
         self.suit_badness = [sum(self.earliest_draw_times[s][:-1]) for s in range(0, game_state.num_suits)]
 
     def make_move(self):
-        hand_states = [[CardState(self.game_state.card_type(card), card, None) for card in self.game_state.hands[p]] for p in range(self.game_state.num_players)]
+        hand_states = [[CardState(card_type(self.game_state, card), card, None) for card in self.game_state.hands[p]] for p in range(self.game_state.num_players)]
 
         # find dupes in players hands, marke one card crit and the other one trash
         p = False
@@ -305,12 +175,13 @@ crits = open("crits_lost.txt", "a")
 
 def run_deck(seed, num_players, deck_str):
     deck = decompress_deck(deck_str)
-    gs = GameState(num_players, deck)
+    instance = HanabiInstance(deck, num_players)
+    gs = GameState(instance)
     strat = GreedyStrategy(gs)
     while not gs.is_over():
         strat.make_move()
     if not gs.score == 25:
-        losses.write("{}-player seed {:10} {}:\n{}\n".format(num_players, seed, str(deck), link(gs.to_json())))
+        losses.write("{}-player seed {:10} {}:\n{}\n".format(num_players, seed, str(deck), link(gs)))
         return False
     return True
 
