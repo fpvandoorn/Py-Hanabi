@@ -194,7 +194,7 @@ class GameState():
         self.actions.append(Action(ActionType.Discard, target=card_idx))
         self.clues += 1
         self.pace -= 1
-        self.trash.append(instance.deck[card_idx])
+        self.trash.append(self.instance.deck[card_idx])
         self.__replace(card_idx)
         self.__make_turn()
 
@@ -209,6 +209,29 @@ class GameState():
         )
         self.clues -= 1
         self.__make_turn()
+    
+
+
+    # Forward some properties of the underlying instance
+    @property
+    def num_players(self):
+        return self.instance.num_players
+
+    @property
+    def num_suits(self):
+        return self.instance.num_suits
+
+    @property
+    def num_dark_suits(self):
+        return self.instance.num_dark_suits
+
+    @property
+    def deck(self):
+        return self.instance.deck
+
+    @property
+    def hand_size(self):
+        return self.instance.hand_size
 
 
     # Properties of GameState
@@ -248,8 +271,8 @@ class GameState():
                 )
             )
         return {
-            "deck": instance.deck,
-            "players": instance.players,
+            "deck": self.instance.deck,
+            "players": self.instance.player_names,
             "actions": self.actions,
             "first_player": 0,
             "options": {
