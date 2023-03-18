@@ -57,7 +57,7 @@ def compress_actions(actions: List[Action], game_id=None) -> str:
 
 
 def decompress_actions(actions_str: str) -> List[Action]:
-    if not len(actions_str >= 2):
+    if not len(actions_str) >= 2:
         raise InvalidFormatError("min/max range not specified, found: {}".format(actions_str))
     try:
         minType = int(actions_str[0])
@@ -99,7 +99,7 @@ def decompress_actions(actions_str: str) -> List[Action]:
         if action_type in [ActionType.Play, ActionType.Discard]:
             if value is not None:
                 raise InvalidFormatError(
-                        "Invalid action value: Action at action index {} is Play/Discard, expected value None, found: {}".format(value)
+                        "Invalid action value: Action at action index {} is Play/Discard, expected value None, found: {}".format(index, value)
                 )
         target = BASE62.index(action[1])
         return Action(action_type, target, value)
@@ -135,7 +135,7 @@ def decompress_deck(deck_str: str) -> List[DeckCard]:
         maxRank = int(deck_str[1])
     except ValueError as e:
         raise InvalidFormatError(
-                "min/max rank range not specified, expected two integers, found {}".format(actions_str[:2])
+                "min/max rank range not specified, expected two integers, found {}".format(deck_str[:2])
         ) from e
     if not maxRank >= minRank:
         raise InvalidFormatError(
@@ -211,7 +211,7 @@ def decompress_game_state(game_str: str) -> GameState:
     except ValueError:
         raise ValueError("Expected variant id, found: {}".format(variant_id))
 
-    instance = HanabInstance(deck, num_players, variant_id=variant_id)
+    instance = HanabiInstance(deck, num_players, variant_id=variant_id)
     game = GameState(instance)
     
     # TODO: game is not in consistent state
@@ -241,7 +241,5 @@ if __name__ == "__main__":
         game.play(1)
         game.play(5)
         game.clue()
-#        a = compress_game_state(game)
-#        print(a)
         print(game.link())
 
