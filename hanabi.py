@@ -29,6 +29,9 @@ class DeckCard():
         # should be injective enough, we never use cards with ranks differing by 1000
         return 1000 * self.suitIndex + self.rank
 
+def pp_deck(deck: List[DeckCard]) -> str:
+    return "[" + ", ".join(card.colorize() for card in deck) + "]"
+
 
 
 class ActionType(Enum):
