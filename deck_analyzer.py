@@ -3,8 +3,9 @@ from typing import List
 from enum import Enum
 
 from database import conn
-from hanabi import HanabiInstance
+from hanabi import HanabiInstance, pp_deck
 from compress import decompress_deck
+import constants
 
 
 class InfeasibilityType(Enum):
@@ -25,6 +26,73 @@ class InfeasibilityReason():
                 return "Deck runs out of pace ({}) after drawing card {}".format(self.value, self.index)
             case InfeasibilityType.OutOfHandSize:
                 return "Deck runs out of hand size after drawing card {}".format(self.index)
+
+def analyze_suit(occurrences):
+    # denotes the indexes of copies we can use wlog
+    picks = {
+            1: 0,
+            **{ r: None for r in range(2, 5) },
+            5: 0
+    }
+
+    # denotes the intervals when cards will be played wlog
+    play_times = {
+            1: [occurrences[1][0]],
+            **{ r: None for _ in range(instance.num_suits)
+                for r in range(2,6)
+              }
+    }
+
+    print("occurrences are: {}".format(occurrences))
+
+    for rank in range(2, 6):
+
+        # general analysis
+        earliest_play = max(min(play_times[rank - 1]), min(occurrences[rank]))
+        latest_play = max( *play_times[rank - 1], *occurrences[rank])
+        play_times[rank] = [earliest_play, latest_play]
+
+        # check a few extra cases regarding the picks when the rank is not 5
+        if rank != 5:
+            # check if we can just play the first copy
+            if max(play_times[rank - 1]) < min(occurrences[rank]):
+                picks[rank] = 0
+                play_times[rank] = [min(occurrences[rank])]
+                continue
+
+
+            # check if the second copy is not worse than the first when it comes,
+            # because we either have to wait for smaller cards anyway
+            # or the next card is not there anyway
+            if max(occurrences[rank]) < max(earliest_play,  min(occurrences[rank + 1])):
+                picks[rank] = 1
+
+
+    return picks, play_times
+
+
+
+def analyze_card_usage(instance: HanabiInstance):
+    storage_size = instance.num_players * instance.hand_size
+    for suit in range(instance.num_suits):
+        print("analysing suit {}: {}".format(
+            suit,
+            pp_deck((c for c in instance.deck if c.suitIndex == suit))
+            )
+        )
+
+        occurrences = {
+                rank: [max(0, i - storage_size + 1) for (i, card) in enumerate(instance.deck) if card == DeckCard(suit, rank)]
+                for rank in range(1,6)
+        }
+
+        picks, play_times = analyze_suit(occurrences)
+
+        print("did analysis:")
+        print("play times: ", play_times)
+        print("picks: ", picks)
+        print()
+
 
 
 def analyze(instance: HanabiInstance, find_non_trivial=False) -> InfeasibilityReason | None:
@@ -135,4 +203,11 @@ if __name__ == "__main__":
 #    print(deck)
 #    a = analyze(deck, 4)
 #    print(a)
-    run_on_database()
+#    run_on_database()
+    deck_str = "15bcfwnqsdmbnfuvhskrgfixwckklojxgemrhpqppuaaiyadultv"
+    deck_str = "15misofrmvvuxujkphaqpcflegysdwqaakcilbxtuhwfrbgdnpkn"
+    deck_str = "15wqpvhdkufjcrewyxulvarhgolkixmfgmndbpstqbupcanfisak"
+    deck = decompress_deck(deck_str)
+    print(pp_deck(deck))
+    instance = HanabiInstance(deck, 2)
+    analyze_card_usage(instance)
