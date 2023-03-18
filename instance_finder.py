@@ -11,6 +11,7 @@ from threading import Lock
 from time import sleep, perf_counter
 from greedy_solver import GameState, GreedyStrategy
 from logger_setup import logger
+from deck_analyzer import analyze, InfeasibilityReason, InfeasibilityType
 
 
 MAX_PROCESSES=4
@@ -106,8 +107,14 @@ def get_decks_for_all_seeds():
 mutex = Lock()
 
 def solve_instance(num_players, deck):
+    # first, sanity check on running out of pace
+    result = analyze(deck, num_players)
+    if result is not None:
+        assert type(result) == InfeasibilityReason
+        logger.info("found infeasible deck")
+        return False, None, None
     for num_remaining_cards in [0, 5, 10, 20, 30]:
-#        print("trying with {} greedy moves".format(num_greedy_moves))
+#        logger.info("trying with {} remaining cards".format(num_remaining_cards))
         game = GameState(num_players, deck)
         strat = GreedyStrategy(game)
 
@@ -124,10 +131,11 @@ def solve_instance(num_players, deck):
 
         # now, apply sat solver
         if not game.is_over():
+            logger.info("continuing greedy sol with SAT")
             solvable, sol = solve_sat(game)
             if solvable:
-                return solvable, sol, num_remaining_cards
-        logger.info("No success, reducing number of greedy moves, failed attempt was: {}".format(link(game.to_json())))
+                return True, sol, num_remaining_cards
+        logger.info("No success with {} remaining cards, reducing number of greedy moves, failed attempt was: {}".format(num_remaining_cards, link(game.to_json())))
 #    print("Aborting trying with greedy strat")
     logger.info("Starting full SAT solver")
     game = GameState(num_players, deck)
@@ -143,17 +151,22 @@ def solve_seed(seed, num_players, deck_compressed, var_id):
     logger.info("Solved instance {} in {} seconds".format(seed, round(t1-t0, 2)))
 
     mutex.acquire()
-    lcur = conn.cursor()
-    lcur.execute("UPDATE seeds SET feasible = (%s) WHERE seed = (%s)", (solvable, seed))
-    conn.commit()
-    if solvable:
+    if solvable is not None:
+        lcur = conn.cursor()
+        lcur.execute("UPDATE seeds SET feasible = (%s) WHERE seed = (%s)", (solvable, seed))
+        conn.commit()
+
+    if solvable == True:
         with open("remaining_cards.txt", "a") as f:
             f.write("Success with {} cards left in draw by greedy solver on seed {}: {}\n".format(num_remaining_cards, seed ,link(solution.to_json())))
-
-    if not solvable:
+    elif solvable == False:
         logger.info("seed {} was not solvable".format(seed))
         with open('infeasible_instances.txt', 'a') as f:
             f.write('{}-player, seed {:10}, {}\n'.format(num_players, seed, variant_name(var_id)))
+    elif solvable is None:
+        logger.info("seed {} skipped".format(seed))
+    else:
+        raise Exception("Programming Error")
 
     mutex.release()
 
@@ -163,6 +176,9 @@ def solve_unknown_seeds():
     for var in VARIANTS:
         cur.execute("SELECT seed, num_players, deck FROM seeds WHERE variant_id = (%s) AND feasible IS NULL AND deck IS NOT NULL", (var['id'],))
         res = cur.fetchall()
+
+#        for r in res:
+#            solve_seed(r[0], r[1], r[2], var['id'])
 
         with concurrent.futures.ProcessPoolExecutor(max_workers=MAX_PROCESSES) as executor:
             fs = [executor.submit(solve_seed, r[0], r[1], r[2], var['id']) for r in res]
