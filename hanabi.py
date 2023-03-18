@@ -233,6 +233,10 @@ class GameState():
     def hand_size(self):
         return self.instance.hand_size
 
+    @property
+    def deck_size(self):
+        return self.instance.deck_size
+
 
     # Properties of GameState
     

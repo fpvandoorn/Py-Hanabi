@@ -4,12 +4,9 @@ import json
 from typing import List
 from concurrent.futures import ProcessPoolExecutor
 
-from compress import DeckCard, Action, ActionType, link, decompress_deck
-from greedy_solver import GameState, GreedyStrategy
-
-COLORS = 'rygbp'
-STANDARD_HAND_SIZE = {2: 5, 3: 5, 4: 4, 5: 4, 6: 3}
-NUM_STRIKES_TO_LOSE = 3
+from hanabi import DeckCard, Action, ActionType, GameState, HanabiInstance
+from compress import link, decompress_deck
+from greedy_solver import GreedyStrategy
 
 
 # literals to model game as sat instance to check for feasibility
@@ -17,33 +14,7 @@ NUM_STRIKES_TO_LOSE = 3
 class Literals():
     # num_suits is total number of suits, i.e. also counts the dark suits
     # default distribution among all suits is assumed
-    def __init__(self, num_players, num_suits, num_dark_suits=0):
-        assert ( 2 <= num_players <= 6 )
-
-        ## some game parameters
-        self.num_players = num_players
-        self.num_suits = num_suits
-        self.num_dark_suits = num_dark_suits
-
-        self.hand_size = STANDARD_HAND_SIZE[num_players]
-        self.num_strikes = NUM_STRIKES_TO_LOSE
-        self.deck_size = 10 * num_suits - 5 * num_dark_suits
-        self.distributed_cards = self.num_players * self.hand_size
-        self.draw_pile_size = self.deck_size - self.distributed_cards
-
-        ## maximum number of moves in any game that can achieve max score
-        # each suit gives 15 moves, as we can play and discard 5 cards each and give 5 clues. dark suits only give 5 moves, since no discards are added
-        # number of cards that remain in players hands after end of game. they cost 2 turns each, since we cannot discard them and also have one clue less
-        # 8 clues at beginning, one further clue for each suit but one (the clue of the last 5 is never useful since it is gained in the extra-round)
-        # subtract a further move for a second 5-clue that can't be used in 5 or 6-player games, since the extraround starts too soon
-        self.max_moves = 15 * num_suits - 10 * num_dark_suits    \
-                        - 2 * num_players * (self.hand_size - 1) \
-                        + 8 + (num_suits - 1)                    \
-                        + (-1 if num_players >= 5 else 0)
-
-        ###
-        # note that we generate 'literals' always one out of boundary and set them to explicit truth values. This makes sat formulation easier but has no actual overhead in solving it
-        # move are numbered starting with 0
+    def __init__(self, instance: HanabiInstance):
 
         # clues[m][i] == "after move m we have at least i clues"
         self.clues = {
@@ -54,20 +25,20 @@ class Literals():
                             **{ i: Symbol('m{}clues{}'.format(m, i)) for i in range(1, 9) },
                             9: Bool(False)                                                # never 9 or more clues. This will implicitly forbid discarding at 8 clues later
                            }
-                        for m in range(self.max_moves)
+                        for m in range(instance.max_winning_moves)
                     }
                 }
 
         # strikes[m][i] == "after move m we have at least i strikes"
         self.strikes = {
-                    -1: {i: Bool(i == 0) for i in range(0, self.num_strikes + 1)}    # no strikes when we start
+                    -1: {i: Bool(i == 0) for i in range(0, instance.num_strikes + 1)}    # no strikes when we start
                   , **{
                           m: {
                               0: Bool(True),
-                              **{ s: Symbol('m{}strikes{}'.format(m,s)) for s in range(1, self.num_strikes) },
-                              self.num_strikes: Bool(False)                              # never so many clues that we lose. Implicitly forbids striking out
+                              **{ s: Symbol('m{}strikes{}'.format(m,s)) for s in range(1, instance.num_strikes) },
+                              instance.num_strikes: Bool(False)                              # never so many clues that we lose. Implicitly forbids striking out
                              }
-                          for m in range(self.max_moves)
+                          for m in range(instance.max_winning_moves)
                       }
                   }
 
@@ -75,8 +46,8 @@ class Literals():
         self.extraround = {
                      -1: Bool(False)
                      , **{
-                             m: Bool(False) if m < self.draw_pile_size else Symbol('m{}extra'.format(m))   # it takes at least as many turns as cards in the draw pile to start the extra round
-                             for m in range(0, self.max_moves)
+                             m: Bool(False) if m < instance.draw_pile_size else Symbol('m{}extra'.format(m))   # it takes at least as many turns as cards in the draw pile to start the extra round
+                             for m in range(0, instance.max_winning_moves)
                          }
                      }
 
@@ -84,26 +55,26 @@ class Literals():
         self.dummyturn = {
                     -1: Bool(False)
                     , **{
-                            m: Bool(False) if m < self.draw_pile_size + self.num_players else Symbol('m{}dummy'.format(m))
-                            for m in range(0, self.max_moves)
+                            m: Bool(False) if m < instance.draw_pile_size + instance.num_players else Symbol('m{}dummy'.format(m))
+                            for m in range(0, instance.max_winning_moves)
                         }
                     }
 
         # draw[m][i] == "at move m we play/discard deck[i]"
         self.discard = {
-                    m: {i: Symbol('m{}discard{}'.format(m, i)) for i in range(self.deck_size)}
-                    for m in range(self.max_moves)
+                    m: {i: Symbol('m{}discard{}'.format(m, i)) for i in range(instance.deck_size)}
+                    for m in range(instance.max_winning_moves)
                   }
 
         # draw[m][i] == "at move m we draw deck card i"
         self.draw = {
-                -1: { i: Bool(i == self.distributed_cards - 1) for i in range(self.distributed_cards - 1, self.deck_size) }
+                -1: { i: Bool(i == instance.num_dealt_cards - 1) for i in range(instance.num_dealt_cards - 1, instance.deck_size) }
                 , **{
                         m: {
-                            self.distributed_cards - 1: Bool(False),
-                            **{i: Symbol('m{}draw{}'.format(m, i)) for i in range(self.distributed_cards, self.deck_size)}
+                            instance.num_dealt_cards - 1: Bool(False),
+                            **{i: Symbol('m{}draw{}'.format(m, i)) for i in range(instance.num_dealt_cards, instance.deck_size)}
                             }
-                        for m in range(self.max_moves)
+                        for m in range(instance.max_winning_moves)
                     }
                }
 
@@ -112,82 +83,89 @@ class Literals():
                  -1: Bool(False)
                  , **{
                         m: Symbol('m{}newstrike'.format(m))
-                        for m in range(self.max_moves)
+                        for m in range(instance.max_winning_moves)
                      }
                  }
 
         # progress[m][card = (suitIndex, rank)] == "after move m we have played in suitIndex up to rank"
         self.progress = {
-                     -1: {(s, r): Bool(r == 0) for s in range(0, self.num_suits) for r in range(0, 6)} # at start, have only played rank zero
+                     -1: {(s, r): Bool(r == 0) for s in range(0, instance.num_suits) for r in range(0, 6)} # at start, have only played rank zero
                    , **{
                            m: {
-                               **{(s, 0): Bool(True) for s in range(0, self.num_suits)},
-                               **{(s, r): Symbol('m{}progress{}{}'.format(m, s, r)) for s in range(0, self.num_suits) for r in range(1, 6)}
+                               **{(s, 0): Bool(True) for s in range(0, instance.num_suits)},
+                               **{(s, r): Symbol('m{}progress{}{}'.format(m, s, r)) for s in range(0, instance.num_suits) for r in range(1, 6)}
                               }
-                           for m in range(self.max_moves)
+                           for m in range(instance.max_winning_moves)
                        }
                    }
 
         ## Utility variables
 
         # discard_any[m] == "at move m we play/discard a card"
-        self.discard_any = { m: Symbol('m{}discard_any'.format(m)) for m in range(self.max_moves) }
+        self.discard_any = { m: Symbol('m{}discard_any'.format(m)) for m in range(instance.max_winning_moves) }
 
         # draw_any[m] == "at move m we draw a card"
-        self.draw_any = {m: Symbol('m{}draw_any'.format(m)) for m in range(self.max_moves)}
+        self.draw_any = {m: Symbol('m{}draw_any'.format(m)) for m in range(instance.max_winning_moves)}
 
         # play[m] == "at move m we play a card"
-        self.play = {m: Symbol('m{}play'.format(m)) for m in range(self.max_moves)}
+        self.play = {m: Symbol('m{}play'.format(m)) for m in range(instance.max_winning_moves)}
 
         # play5[m] == "at move m we play a 5"
-        self.play5 = {m: Symbol('m{}play5'.format(m)) for m in range(self.max_moves)}
+        self.play5 = {m: Symbol('m{}play5'.format(m)) for m in range(instance.max_winning_moves)}
 
         # incr_clues[m] == "at move m we obtain a clue"
-        self.incr_clues = {m: Symbol('m{}c+'.format(m)) for m in range(self.max_moves)}
+        self.incr_clues = {m: Symbol('m{}c+'.format(m)) for m in range(instance.max_winning_moves)}
 
 
-def solve_sat(game_state: GameState):
-    ls = Literals(game_state.num_players, game_state.num_suits, game_state.num_dark_suits)
+def solve_sat(starting_state: GameState | HanabiInstance):
+    if isinstance(starting_state, HanabiInstance):
+        instance = starting_state
+        game_state = GameState(instance)
+    elif isinstance(starting_state, GameState):
+        instance = starting_state.instance
+        game_state = starting_state
+    else:
+        raise ValueError("Bad argument type")
+
+    ls = Literals(instance)
 
     ##### setup of initial game state
 
     # properties used later to model valid moves
-    num_dark_suits = game_state.num_dark_suits
-    num_suits = game_state.num_suits
-    deck = game_state.deck
-    next_draw = game_state.progress
 
     starting_hands = [[card.deck_index for card in hand] for hand in game_state.hands]
-
     first_turn = len(game_state.actions)
 
-    # set initial clues
-    for i in range(0,10):
-        ls.clues[first_turn - 1][i] = Bool(i <= game_state.clues)
+    if isinstance(starting_state, GameState):
+        # have to set additional variables
 
-    # set initial strikes
-    for i in range(0, game_state.num_strikes + 1):
-        ls.strikes[first_turn - 1][i] = Bool(i <= game_state.strikes)
+        # set initial clues
+        for i in range(0,10):
+            ls.clues[first_turn - 1][i] = Bool(i <= game_state.clues)
 
-    # check if extraround has started (usually not)
-    ls.extraround[first_turn - 1] = Bool(game_state.remaining_extra_turns < game_state.num_players)
-    ls.dummyturn[first_turn -1] = Bool(False)
-    
-    # set recent draws: important to model progress
-    # we just pretend that the last card drawn was in fact drawn last turn,
-    # regardless of when it was actually drawn
-    for neg_turn in range(1, min(9, first_turn + 2)):
-        for i in range(game_state.num_players * game_state.hand_size, game_state.deck_size):
-            ls.draw[first_turn - neg_turn][i] = Bool(neg_turn == 1 and i == game_state.progress - 1)
-    # forbid re-drawing of the last card drawn
-    for m in range(first_turn, ls.max_moves):
-        ls.draw[m][game_state.progress - 1] = Bool(False)
+        # set initial strikes
+        for i in range(0, instance.num_strikes + 1):
+            ls.strikes[first_turn - 1][i] = Bool(i <= game_state.strikes)
+
+        # check if extraround has started (usually not)
+        ls.extraround[first_turn - 1] = Bool(game_state.remaining_extra_turns < game_state.num_players)
+        ls.dummyturn[first_turn -1] = Bool(False)
+        
+        # set recent draws: important to model progress
+        # we just pretend that the last card drawn was in fact drawn last turn,
+        # regardless of when it was actually drawn
+        for neg_turn in range(1, min(9, first_turn + 2)):
+            for i in range(instance.num_players * instance.hand_size, instance.deck_size):
+                ls.draw[first_turn - neg_turn][i] = Bool(neg_turn == 1 and i == game_state.progress - 1)
+        # forbid re-drawing of the last card drawn
+        for m in range(first_turn, instance.max_winning_moves):
+            ls.draw[m][game_state.progress - 1] = Bool(False)
 
 
-    # model initial progress
-    for s in range(0, game_state.num_suits):
-        for r in range(0, 6):
-            ls.progress[first_turn - 1][s, r] = Bool(r <= game_state.stacks[s])
+        # model initial progress
+        for s in range(0, game_state.num_suits):
+            for r in range(0, 6):
+                ls.progress[first_turn - 1][s, r] = Bool(r <= game_state.stacks[s])
 
     ### Now, model all valid moves
     
@@ -196,10 +174,10 @@ def solve_sat(game_state: GameState):
         Implies(ls.dummyturn[m], Not(ls.discard_any[m])),
 
         # definition of discard_any
-        Iff(ls.discard_any[m], Or(ls.discard[m][i] for i in range(ls.deck_size))),
+        Iff(ls.discard_any[m], Or(ls.discard[m][i] for i in range(instance.deck_size))),
 
         # definition of draw_any
-        Iff(ls.draw_any[m], Or(ls.draw[m][i] for i in range(next_draw, ls.deck_size))),
+        Iff(ls.draw_any[m], Or(ls.draw[m][i] for i in range(game_state.progress, instance.deck_size))),
 
         # ls.draw implies ls.discard (and converse true before the ls.extraround)
         Implies(ls.draw_any[m], ls.discard_any[m]),
@@ -209,7 +187,7 @@ def solve_sat(game_state: GameState):
         Implies(ls.play[m], ls.discard_any[m]),
 
         # definition of ls.play5
-        Iff(ls.play5[m], And(ls.play[m], Or(ls.discard[m][i] for i in range(ls.deck_size) if deck[i].rank == 5))),
+        Iff(ls.play5[m], And(ls.play[m], Or(ls.discard[m][i] for i in range(instance.deck_size) if instance.deck[i].rank == 5))),
 
         # definition of ls.incr_clues
         Iff(ls.incr_clues[m], And(ls.discard_any[m], Implies(ls.play[m], And(ls.play5[m], Not(ls.clues[m-1][8]))))),
@@ -225,38 +203,38 @@ def solve_sat(game_state: GameState):
         Iff(ls.strike[m], And(ls.discard_any[m], Not(ls.play[m]), ls.clues[m-1][8])),
 
         # change of strikes
-        *[Iff(ls.strikes[m][i], Or(ls.strikes[m-1][i], And(ls.strikes[m-1][i-1], ls.strike[m]))) for i in range(1, ls.num_strikes + 1)],
+        *[Iff(ls.strikes[m][i], Or(ls.strikes[m-1][i], And(ls.strikes[m-1][i-1], ls.strike[m]))) for i in range(1, instance.num_strikes + 1)],
 
         # less than 0 clues not allowed
         Implies(Not(ls.discard_any[m]), Or(ls.clues[m-1][1], ls.dummyturn[m])),
 
         # we can only draw card i if the last ls.drawn card was i-1
-        *[Implies(ls.draw[m][i], Or(And(ls.draw[m0][i-1], *[Not(ls.draw_any[m1]) for m1 in range(m0+1, m)]) for m0 in range(max(first_turn - 1, m-9), m))) for i in range(next_draw, ls.deck_size)],
+        *[Implies(ls.draw[m][i], Or(And(ls.draw[m0][i-1], *[Not(ls.draw_any[m1]) for m1 in range(m0+1, m)]) for m0 in range(max(first_turn - 1, m-9), m))) for i in range(game_state.progress, instance.deck_size)],
 
         # we can only draw at most one card (NOTE: redundant, FIXME: avoid quadratic formula)
-        AtMostOne(ls.draw[m][i] for i in range(next_draw, ls.deck_size)),
+        AtMostOne(ls.draw[m][i] for i in range(game_state.progress, instance.deck_size)),
 
         # we can only discard a card if we drew it earlier...
-        *[Implies(ls.discard[m][i], Or(ls.draw[m0][i] for m0 in range(m-ls.num_players, first_turn - 1, -ls.num_players))) for i in range(next_draw, ls.deck_size)],
+        *[Implies(ls.discard[m][i], Or(ls.draw[m0][i] for m0 in range(m-instance.num_players, first_turn - 1, -instance.num_players))) for i in range(game_state.progress, instance.deck_size)],
 
         # ...or if it was part of the initial hand
-        *[Not(ls.discard[m][i]) for i in range(0, next_draw) if i not in starting_hands[m % ls.num_players] ],
+        *[Not(ls.discard[m][i]) for i in range(0, game_state.progress) if i not in starting_hands[m % instance.num_players] ],
 
         # we can only discard a card if we did not discard it yet
-        *[Implies(ls.discard[m][i], And(Not(ls.discard[m0][i]) for m0 in range(m-ls.num_players, first_turn - 1, -ls.num_players))) for i in range(ls.deck_size)],
+        *[Implies(ls.discard[m][i], And(Not(ls.discard[m0][i]) for m0 in range(m-instance.num_players, first_turn - 1, -instance.num_players))) for i in range(instance.deck_size)],
 
         # we can only discard at most one card (FIXME: avoid quadratic formula)
-        AtMostOne(ls.discard[m][i] for i in range(ls.deck_size)),
+        AtMostOne(ls.discard[m][i] for i in range(instance.deck_size)),
 
         # we can only play a card if it matches the progress
         *[Implies(
                     And(ls.discard[m][i], ls.play[m]),
                     And(
-                        Not(ls.progress[m-1][deck[i].suitIndex, deck[i].rank]),
-                        ls.progress[m-1][deck[i].suitIndex, deck[i].rank-1 ]
+                        Not(ls.progress[m-1][instance.deck[i].suitIndex, instance.deck[i].rank]),
+                        ls.progress[m-1][instance.deck[i].suitIndex, instance.deck[i].rank-1 ]
                        )
                   )
-          for i in range(ls.deck_size)
+          for i in range(instance.deck_size)
           ],
 
         # change of progress
@@ -266,46 +244,46 @@ def solve_sat(game_state: GameState):
                 Or(
                     ls.progress[m-1][s, r],
                     And(ls.play[m], Or(ls.discard[m][i]
-                        for i in range(0, ls.deck_size)
-                        if deck[i] == DeckCard(s, r) ))
+                        for i in range(0, instance.deck_size)
+                        if instance.deck[i] == DeckCard(s, r) ))
                   )
                 )
-            for s in range(0, ls.num_suits)
+            for s in range(0, instance.num_suits)
             for r in range(1, 6)
          ],
 
         # extra round bool
-        Iff(ls.extraround[m], Or(ls.extraround[m-1], ls.draw[m-1][ls.deck_size-1])),
+        Iff(ls.extraround[m], Or(ls.extraround[m-1], ls.draw[m-1][instance.deck_size-1])),
 
         # dummy turn bool
-        *[Iff(ls.dummyturn[m], Or(ls.dummyturn[m-1], ls.draw[m-1 - ls.num_players][ls.deck_size-1])) for i in range(0,1) if m >= ls.num_players]
+        *[Iff(ls.dummyturn[m], Or(ls.dummyturn[m-1], ls.draw[m-1 - instance.num_players][instance.deck_size-1])) for i in range(0,1) if m >= instance.num_players]
     )
 
     win = And(
         # maximum progress at each color
-        *[ls.progress[ls.max_moves-1][s, 5] for s in range(0, ls.num_suits)],
+        *[ls.progress[instance.max_winning_moves-1][s, 5] for s in range(0, instance.num_suits)],
 
         # played every color/value combination (NOTE: redundant, but makes solving faster)
         *[
             Or(
                And(ls.discard[m][i], ls.play[m])
-               for m in range(first_turn, ls.max_moves)
-               for i in range(ls.deck_size)
+               for m in range(first_turn, instance.max_winning_moves)
+               for i in range(instance.deck_size)
                if game_state.deck[i] == DeckCard(s, r)
               )
-          for s in range(0, ls.num_suits)
+          for s in range(0, instance.num_suits)
           for r in range(1, 6)
           if r > game_state.stacks[s]
           ]
     )
 
-    constraints = And(*[valid_move(m) for m in range(first_turn, ls.max_moves)], win)
+    constraints = And(*[valid_move(m) for m in range(first_turn, instance.max_winning_moves)], win)
 #    print('Solving instance with {} variables, {} nodes'.format(len(get_atoms(constraints)), get_formula_size(constraints)))
 
     model = get_model(constraints)
     if model:
 #        print_model(model, game_state, ls)
-        solution = toJSON(model, game_state, ls)
+        solution = evaluate_model(model, game_state, ls)
         return True, solution
     else:
         #conj = list(conjunctive_partition(constraints))
@@ -315,6 +293,7 @@ def solve_sat(game_state: GameState):
         #for f in ucore:
         #    print(f.serialize())
         return False, None
+
 
 def print_model(model, cur_game_state, ls: Literals):
     deck = cur_game_state.deck
@@ -330,12 +309,15 @@ def print_model(model, cur_game_state, ls: Literals):
         print(', '.join(f for f in flags if model.get_py_value(getattr(ls, f)[m])))
 
 
-def toJSON(model, cur_game_state: GameState, ls: Literals) -> GameState:
-    for m in range(len(cur_game_state.actions), ls.max_moves):
+
+# given the initial game state and the model found by the SAT solver,
+# evaluates the model to produce a full game history
+def evaluate_model(model, cur_game_state: GameState, ls: Literals) -> GameState:
+    for m in range(len(cur_game_state.actions), cur_game_state.instance.max_winning_moves):
         if model.get_py_value(ls.dummyturn[m]):
             break
         if model.get_py_value(ls.discard_any[m]):
-            card_idx = next(i for i in range(0, ls.deck_size) if model.get_py_value(ls.discard[m][i]))
+            card_idx = next(i for i in range(0, cur_game_state.instance.deck_size) if model.get_py_value(ls.discard[m][i]))
             if model.get_py_value(ls.play[m]) or model.get_py_value(ls.strike[m]):
                 cur_game_state.play(card_idx)
             else:
@@ -344,6 +326,8 @@ def toJSON(model, cur_game_state: GameState, ls: Literals) -> GameState:
             cur_game_state.clue()
 
     return cur_game_state
+
+
 
 def run_deck():
     puzzle = False
@@ -361,7 +345,7 @@ def run_deck():
 
     print(deck)
 
-    gs = GameState(num_p, deck)
+    gs = GameState(HanabiInstance(deck, num_p))
     if puzzle:
         gs.play(2)
     else:
@@ -372,7 +356,7 @@ def run_deck():
     solvable, sol = solve_sat(gs)
     if solvable:
         print(sol)
-        print(link(sol.to_json()))
+        print(link(sol))
     else:
         print('unsolvable')
 
