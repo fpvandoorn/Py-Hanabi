@@ -137,6 +137,10 @@ class HanabiInstance():
             assert(self.is_standard())
             return constants.VARIANT_IDS_STANDARD_DISTRIBUTIONS[self.num_suits][self.num_dark_suits]
 
+    @property
+    def max_score(self):
+        return 5 * self.num_suits
+
     # returns True if the instance has values matching hanabi-live rules
     # (i.e. standard + extra variants with 5 / 6 suits)
     def is_standard(self):
