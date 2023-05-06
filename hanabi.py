@@ -166,18 +166,25 @@ class GameState():
         # can be set to true if game is known to be in a lost state
         self.in_lost_state = False
 
+        # automatically set upon third strike, when extar round is over or when explicitly taking EndGame or VoteTerminate actions
+        self.over = False
+
         # will track replay as game progresses
         self.actions = []
 
 
     ## Methods to control game state change
 
-    def make_action(self, Action):
-        match Action.ActionType:
-            case ActionType.clue:
+    def make_action(self, action):
+        match action.type:
+            case ActionType.ColorClue | ActionType.RankClue:
                 self.clue()
             case ActionType.Play:
                 self.play(action.target)
+            case ActionType.Discard:
+                self.discard(action.target)
+            case ActionType.EndGame | ActionType.VoteTerminate:
+                self.over = True
 
     def play(self, card_idx):
         card = self.instance.deck[card_idx]
@@ -187,11 +194,12 @@ class GameState():
                 self.clues += 1
         else:
             self.strikes += 1
-            assert (self.strikes < self.instance.num_strikes)
             self.trash.append(self.instance.deck[card_idx])
         self.actions.append(Action(ActionType.Play, target=card_idx))
         self.__replace(card_idx)
         self.__make_turn()
+        if all(s == 5 for s in self.stacks) or self.strikes >= self.instance.num_strikes:
+            self.over = True
 
     def discard(self, card_idx):
         assert(self.clues < 8)
@@ -245,7 +253,7 @@ class GameState():
     # Properties of GameState
     
     def is_over(self):
-        return all(s == 5 for s in self.stacks) or (self.remaining_extra_turns == 0) or (self.is_known_lost())
+        return self.over or self.is_known_lost()
 
     def is_won(self):
         return self.score == 5 * instance.num_suits
@@ -255,6 +263,8 @@ class GameState():
 
     @property
     def score(self):
+        if self.strikes >= self.instance.num_strikes:
+            return 0
         return sum(self.stacks)
 
     @property
@@ -292,10 +302,12 @@ class GameState():
     
     # increments turn counter and tracks extra round
     def __make_turn(self):
-        assert(self.remaining_extra_turns > 0)
+        assert(not self.over)
         self.turn = (self.turn + 1) % self.instance.num_players
         if self.progress == self.instance.deck_size:
             self.remaining_extra_turns -= 1
+            if self.remaining_extra_turns == 0:
+                self.over = True
 
     # replaces the specified card (has to be in current player's hand) with the next card of the deck (if nonempty)
     def __replace(self, card_idx):
