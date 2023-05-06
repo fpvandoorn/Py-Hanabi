@@ -188,7 +188,11 @@ class GameState():
     def make_action(self, action):
         match action.type:
             case ActionType.ColorClue | ActionType.RankClue:
-                self.clue()
+                assert(self.clues > 0)
+                self.actions.append(action)
+                self.clues -= 1
+                self.__make_turn()
+                # TODO: could check that the clue specified is in fact legal
             case ActionType.Play:
                 self.play(action.target)
             case ActionType.Discard:
