@@ -1,6 +1,6 @@
 import json
 from site_api import get, api, replay
-from sat import COLORS, solve_sat
+from sat import solve_sat
 from database import Game, store, load, commit, conn
 from download_data import export_game
 from variants import num_suits, VARIANTS, variant_name
@@ -144,31 +144,35 @@ def solve_instance(num_players, deck):
 
 
 def solve_seed(seed, num_players, deck_compressed, var_id):
-    deck = decompress_deck(deck_compressed)
-    t0 = perf_counter()
-    solvable, solution, num_remaining_cards = solve_instance(num_players, deck)
-    t1 = perf_counter()
-    logger.info("Solved instance {} in {} seconds".format(seed, round(t1-t0, 2)))
+    try:
+        deck = decompress_deck(deck_compressed)
+        t0 = perf_counter()
+        solvable, solution, num_remaining_cards = solve_instance(num_players, deck)
+        t1 = perf_counter()
+        logger.info("Solved instance {} in {} seconds".format(seed, round(t1-t0, 2)))
 
-    mutex.acquire()
-    if solvable is not None:
-        lcur = conn.cursor()
-        lcur.execute("UPDATE seeds SET feasible = (%s) WHERE seed = (%s)", (solvable, seed))
-        conn.commit()
+        mutex.acquire()
+        if solvable is not None:
+            lcur = conn.cursor()
+            lcur.execute("UPDATE seeds SET feasible = (%s) WHERE seed = (%s)", (solvable, seed))
+            conn.commit()
 
-    if solvable == True:
-        with open("remaining_cards.txt", "a") as f:
-            f.write("Success with {} cards left in draw by greedy solver on seed {}: {}\n".format(num_remaining_cards, seed ,link(solution.to_json())))
-    elif solvable == False:
-        logger.info("seed {} was not solvable".format(seed))
-        with open('infeasible_instances.txt', 'a') as f:
-            f.write('{}-player, seed {:10}, {}\n'.format(num_players, seed, variant_name(var_id)))
-    elif solvable is None:
-        logger.info("seed {} skipped".format(seed))
-    else:
-        raise Exception("Programming Error")
+        if solvable == True:
+            with open("remaining_cards.txt", "a") as f:
+                f.write("Success with {} cards left in draw by greedy solver on seed {}: {}\n".format(num_remaining_cards, seed ,link(solution.to_json())))
+        elif solvable == False:
+            logger.info("seed {} was not solvable".format(seed))
+            with open('infeasible_instances.txt', 'a') as f:
+                f.write('{}-player, seed {:10}, {}\n'.format(num_players, seed, variant_name(var_id)))
+        elif solvable is None:
+            logger.info("seed {} skipped".format(seed))
+        else:
+            raise Exception("Programming Error")
 
-    mutex.release()
+        mutex.release()
+    except Exception:
+        traceback.format_exc()
+        print("exception in subprocess:")
 
 
 def solve_unknown_seeds():

@@ -4,3 +4,4 @@ pysmt
 termcolor
 more_itertools
 psycopg2
+alive_progress
