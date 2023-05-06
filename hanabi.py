@@ -187,8 +187,8 @@ class GameState():
                 self.clues += 1
         else:
             self.strikes += 1
-            assert (self.strikes < instance.num_strikes)
-            self.trash.append(instance.deck[card_idx])
+            assert (self.strikes < self.instance.num_strikes)
+            self.trash.append(self.instance.deck[card_idx])
         self.actions.append(Action(ActionType.Play, target=card_idx))
         self.__replace(card_idx)
         self.__make_turn()
