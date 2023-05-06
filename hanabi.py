@@ -48,6 +48,9 @@ class Action():
         self.type = type_
         self.target = target
         self.value = value
+        # enforce no values on play / discard
+        if self.type in [ActionType.Discard, ActionType.Play]:
+            self.value = None
 
     @staticmethod
     def from_json(action):
@@ -72,6 +75,9 @@ class Action():
             case ActionType.VoteTerminate:
                 return "Players vote to terminate the game (code {})".format(self.value)
         return "Undefined action"
+
+    def __eq__(self, other):
+        return self.type == other.type and self.target == other.target and self.value == other.value
 
 
 class HanabiInstance():
