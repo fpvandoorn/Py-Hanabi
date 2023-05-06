@@ -82,17 +82,17 @@ def export_game(game_id) -> [bool, bool]:
         with conn.cursor() as cur:
             #        cur.execute("UPDATE seeds SET deck=(%s) WHERE seed=(%s);", (deck, seed))
             cur.execute(
-                    "INSERT INTO games (id, num_players, score, seed, variant_id, deck_plays, one_extra_card, one_less_card, all_or_nothing, actions)"
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                    (game_id, num_players, game.score, seed, var_id, deck_plays, one_extra_card, one_less_card, all_or_nothing, compressed_actions))
-            cur.execute(
                     "INSERT INTO seeds (seed, num_players, variant_id, deck)"
                     "VALUES (%s, %s, %s, %s)"
                     "ON CONFLICT (seed) DO NOTHING",
                     (seed, num_players, var_id, compressed_deck)
                     )
+            cur.execute(
+                    "INSERT INTO games (id, num_players, score, seed, variant_id, deck_plays, one_extra_card, one_less_card, all_or_nothing, actions)"
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    (game_id, num_players, game.score, seed, var_id, deck_plays, one_extra_card, one_less_card, all_or_nothing, compressed_actions))
     conn.commit()
     return True, not any([deck_plays, one_extra_card, one_less_card, all_or_nothing])
 
 if __name__ == "__main__":
-    export_game(960753)
+    export_game(961092)
