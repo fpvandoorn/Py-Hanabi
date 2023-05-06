@@ -1,0 +1,6 @@
+requests
+requests_cache
+pysmt
+termcolor
+more_itertools
+psycopg2
