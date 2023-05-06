@@ -2,6 +2,8 @@ import json
 from site_api import get, api, replay
 from database import Game, store, load, commit, conn
 from compress import compress_deck, compress_actions, DeckCard, Action
+from variants import variant_id
+from hanabi import HanabiInstance, GameState, Action
 
 with open('variants.json') as f:
     variants = json.loads(f.read())
@@ -31,37 +33,66 @@ def download_games(variant_id, name=None):
 # requires seed AND game to already have an entry in database
 # return: (successfully exported game, game without cheat options, null if not exported)
 def export_game(game_id) -> [bool, bool]:
-    r = get("export/{}".format(game_id))
-    if r is None:
-        print("Failed to export game id {}".format(game_id))
-        return False, None
-    assert(r['id'] == game_id)
-    deck = compress_deck([DeckCard.from_json(card) for card in r['deck']])
     with conn.cursor() as cur:
-        cur.execute("UPDATE seeds SET deck=(%s) WHERE seed=(%s);", (deck, r['seed']))
-    try:
-        actions = compress_actions([Action.from_json(a) for a in r['actions']], r['id'])
-    except:
-        print("Unknown action while exporting game id {}".format(game_id))
-        raise
-        return False, None
-    options = r.get('options', {})
-    deck_plays = options.get('deckPlays', False)
-    one_extra_card = options.get('oneExtraCard', False)
-    one_less_card = options.get('oneLessCard', False)
-    all_or_nothing = options.get('allOrNothing', False)
-    with conn.cursor() as cur:
-        cur.execute(
-                "UPDATE games SET "
-                "deck_plays = (%s),"
-                "one_extra_card = (%s),"
-                "one_less_card = (%s),"
-                "all_or_nothing = (%s),"
-                "actions = (%s) "
-                "WHERE id = (%s);",
-                (deck_plays, one_extra_card, one_less_card, all_or_nothing, actions, game_id))
+        cur.execute("SELECT deck_plays, one_extra_card, one_less_card, all_or_nothing, actions FROM games WHERE id = (%s)", (game_id,))
+        res = cur.fetchall()
+    if len(res) == 1:
+        print(res)
+    else:
+        print('game is completely new')
+#        return
+
+        r = get("export/{}".format(game_id))
+        if r is None:
+            print("Failed to export game id {}".format(game_id))
+            return False, None
+        assert(r['id'] == game_id)
+    #    print(r)
+
+        try:
+            num_players = len(r['players'])
+            seed = r['seed']
+            options = r.get('options', {})
+            var_id = variant_id(options['variant'])
+            deck_plays = options.get('deckPlays', False)
+            one_extra_card = options.get('oneExtraCard', False)
+            one_less_card = options.get('oneLessCard', False)
+            all_or_nothing = options.get('allOrNothing', False)
+            actions = [Action.from_json(action) for action in r['actions']]
+            deck = [DeckCard.from_json(card) for card in r['deck']]
+        except KeyError:
+            print('Error parsing JSON when exporting game {}'.format(game_id))
+
+        # need to play through the game once to find out its score
+        game = GameState(HanabiInstance(deck, num_players))
+        for action in actions:
+            game.make_action(action)
+
+        try:
+            compressed_deck = compress_deck(deck)
+        except:
+            print("Failed to compress deck while exporting game {}".format(game_id))
+            raise
+        try:
+            compressed_actions = compress_actions(actions)
+        except:
+            print("Failed to compress actions while exporting game {}".format(game_id))
+            raise
+
+        with conn.cursor() as cur:
+            #        cur.execute("UPDATE seeds SET deck=(%s) WHERE seed=(%s);", (deck, seed))
+            cur.execute(
+                    "INSERT INTO games (id, num_players, score, seed, variant_id, deck_plays, one_extra_card, one_less_card, all_or_nothing, actions)"
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    (game_id, num_players, game.score, seed, var_id, deck_plays, one_extra_card, one_less_card, all_or_nothing, compressed_actions))
+            cur.execute(
+                    "INSERT INTO seeds (seed, num_players, variant_id, deck)"
+                    "VALUES (%s, %s, %s, %s)"
+                    "ON CONFLICT (seed) DO NOTHING",
+                    (seed, num_players, var_id, compressed_deck)
+                    )
     conn.commit()
     return True, not any([deck_plays, one_extra_card, one_less_card, all_or_nothing])
 
 if __name__ == "__main__":
-    export_game(913436)
+    export_game(960753)
