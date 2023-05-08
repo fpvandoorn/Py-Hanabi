@@ -315,7 +315,7 @@ def print_model(model, cur_game_state, ls: Literals):
 # evaluates the model to produce a full game history
 def evaluate_model(model, cur_game_state: GameState, ls: Literals) -> GameState:
     for m in range(len(cur_game_state.actions), cur_game_state.instance.max_winning_moves):
-        if model.get_py_value(ls.dummyturn[m]):
+        if model.get_py_value(ls.dummyturn[m]) or cur_game_state.is_over():
             break
         if model.get_py_value(ls.discard_any[m]):
             card_idx = next(i for i in range(0, cur_game_state.instance.deck_size) if model.get_py_value(ls.discard[m][i]))
