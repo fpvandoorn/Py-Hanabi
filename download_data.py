@@ -38,6 +38,7 @@ def export_game(game_id) -> [bool, bool]:
         res = cur.fetchall()
     if len(res) == 1:
         print(res)
+        return
     else:
         print('game is completely new')
 #        return
@@ -53,7 +54,7 @@ def export_game(game_id) -> [bool, bool]:
             num_players = len(r['players'])
             seed = r['seed']
             options = r.get('options', {})
-            var_id = variant_id(options['variant'])
+            var_id = variant_id(options.get('variant', 'No Variant'))
             deck_plays = options.get('deckPlays', False)
             one_extra_card = options.get('oneExtraCard', False)
             one_less_card = options.get('oneLessCard', False)
@@ -62,6 +63,7 @@ def export_game(game_id) -> [bool, bool]:
             deck = [DeckCard.from_json(card) for card in r['deck']]
         except KeyError:
             print('Error parsing JSON when exporting game {}'.format(game_id))
+            raise
 
         # need to play through the game once to find out its score
         game = GameState(HanabiInstance(deck, num_players))
