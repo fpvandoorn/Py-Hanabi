@@ -39,7 +39,7 @@ def check_game(game_id: int) -> Tuple[int, GameState]:
         game = GameState(instance)
         solvable, solution = solve_sat(game)
         if not solvable:
-            return -1, solution
+            return 0, solution
 
         while (unsolvable_turn - solvable_turn > 1):
             try_turn = (unsolvable_turn + solvable_turn) // 2
