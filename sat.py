@@ -31,6 +31,15 @@ class Literals():
                     }
                 }
 
+        # half_clue[m] == "after move we have (an additional) half a clue [relevant for ClueStarved variants]"
+        self.half_clue = {
+                -1: Bool(False)
+                , **{
+                    m: Symbol('m{}halfclue'.format(m))
+                    for m in range(instance.max_winning_moves)
+                    }
+                }
+
         # strikes[m][i] == "after move m we have at least i strikes"
         self.strikes = {
                     -1: {i: Bool(i == 0) for i in range(0, instance.num_strikes + 1)}    # no strikes when we start
@@ -195,7 +204,18 @@ def solve_sat(starting_state: GameState | HanabiInstance) -> Tuple[bool, Optiona
         Iff(ls.incr_clues[m], And(ls.discard_any[m], Not(ls.clues[m-1][8]), Implies(ls.play[m], ls.play5[m]))),
 
         # change of ls.clues
-        *[Iff(ls.clues[m][i], Or(ls.clues[m-1][i+1], And(ls.clues[m-1][i], Or(ls.discard_any[m], ls.dummyturn[m])), And(ls.clues[m-1][i-1], ls.incr_clues[m]))) for i in range(1, 9)],
+        *[
+            Iff(ls.clues[m][i], Or(
+                ls.clues[m-1][i+1],
+                And(ls.clues[m-1][i], Or(ls.discard_any[m], ls.dummyturn[m])),
+                And(ls.clues[m-1][i-1], ls.incr_clues[m], ls.half_clue[m-1] if instance.clue_starved else Bool(True))
+                )
+            )
+          for i in range(1, 9)
+        ],
+
+        Iff(ls.half_clue[m], Or(And(ls.half_clue[m-1], Not(ls.incr_clues[m])), And(Not(ls.half_clue[m-1])), ls.incr_clues[m]))
+        if instance.clue_starved else Bool(True),
 
         ## more than 8 clues not allowed, ls.discarding produces a strike
         # Note that this means that we will never strike while not at 8 clues.
@@ -299,7 +319,10 @@ def solve_sat(starting_state: GameState | HanabiInstance) -> Tuple[bool, Optiona
 
 def print_model(model, cur_game_state, ls: Literals):
     deck = cur_game_state.deck
-    for m in range(cur_game_state.instance.max_winning_moves):
+    first_turn = len(cur_game_state.actions)
+    if first_turn > 0:
+        print('[print_model] Note: Omitting first {} turns, since they were fixed already.'.format(first_turn))
+    for m in range(first_turn, cur_game_state.instance.max_winning_moves):
         print('=== move {} ==='.format(m))
         print('clues: ' + ''.join(str(i) for i in range(1, 9) if model.get_py_value(ls.clues[m][i])))
         print('strikes: ' + ''.join(str(i) for i in range(1, 3) if model.get_py_value(ls.strikes[m][i])))
