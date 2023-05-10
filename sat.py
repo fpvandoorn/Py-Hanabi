@@ -192,7 +192,7 @@ def solve_sat(starting_state: GameState | HanabiInstance) -> Tuple[bool, Optiona
         Iff(ls.play5[m], And(ls.play[m], Or(ls.discard[m][i] for i in range(instance.deck_size) if instance.deck[i].rank == 5))),
 
         # definition of ls.incr_clues
-        Iff(ls.incr_clues[m], And(ls.discard_any[m], Implies(ls.play[m], And(ls.play5[m], Not(ls.clues[m-1][8]))))),
+        Iff(ls.incr_clues[m], And(ls.discard_any[m], Not(ls.clues[m-1][8]), Implies(ls.play[m], ls.play5[m]))),
 
         # change of ls.clues
         *[Iff(ls.clues[m][i], Or(ls.clues[m-1][i+1], And(ls.clues[m-1][i], Or(ls.discard_any[m], ls.dummyturn[m])), And(ls.clues[m-1][i-1], ls.incr_clues[m]))) for i in range(1, 9)],
