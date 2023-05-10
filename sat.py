@@ -8,6 +8,7 @@ from concurrent.futures import ProcessPoolExecutor
 from hanabi import DeckCard, Action, ActionType, GameState, HanabiInstance
 from compress import link, decompress_deck
 from greedy_solver import GreedyStrategy
+from constants import COLOR_INITIALS
 
 
 # literals to model game as sat instance to check for feasibility
@@ -298,14 +299,14 @@ def solve_sat(starting_state: GameState | HanabiInstance) -> Tuple[bool, Optiona
 
 def print_model(model, cur_game_state, ls: Literals):
     deck = cur_game_state.deck
-    for m in range(ls.max_moves):
+    for m in range(cur_game_state.instance.max_winning_moves):
         print('=== move {} ==='.format(m))
         print('clues: ' + ''.join(str(i) for i in range(1, 9) if model.get_py_value(ls.clues[m][i])))
         print('strikes: ' + ''.join(str(i) for i in range(1, 3) if model.get_py_value(ls.strikes[m][i])))
         print('draw: ' + ', '.join('{}: {}'.format(i, deck[i]) for i in range(cur_game_state.progress, 50) if model.get_py_value(ls.draw[m][i])))
         print('discard: ' + ', '.join('{}: {}'.format(i, deck[i]) for i in range(50) if model.get_py_value(ls.discard[m][i])))
-        for s in range(0, ls.num_suits):
-            print('progress {}: '.format(COLORS[s]) + ''.join(str(r) for r in range(1, 6) if model.get_py_value(ls.progress[m][s, r])))
+        for s in range(0, cur_game_state.instance.num_suits):
+            print('progress {}: '.format(COLOR_INITIALS[s]) + ''.join(str(r) for r in range(1, 6) if model.get_py_value(ls.progress[m][s, r])))
         flags = ['discard_any', 'draw_any', 'play', 'play5', 'incr_clues', 'strike', 'extraround', 'dummyturn']
         print(', '.join(f for f in flags if model.get_py_value(getattr(ls, f)[m])))
 
