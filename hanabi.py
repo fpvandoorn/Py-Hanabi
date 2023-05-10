@@ -87,6 +87,7 @@ class HanabiInstance():
             num_players: int,                   # number of players that play this deck, in range [2,6]
             hand_size: Optional[int]   = None,  # number of cards that each player holds
             num_strikes: Optional[int] = None,  # number of strikes that leads to game loss
+            clue_starved: bool         = False, # if true, discarding and playing fives only gives back half a clue
             variant_id: Optional[int]  = None   # optional: variant id of hanab.live, useful if instance gets exported to be viewed in browser
         ):
         assert(2 <= num_players <= 6)
@@ -96,6 +97,7 @@ class HanabiInstance():
         self.num_players = num_players
         self.hand_size = hand_size or constants.HAND_SIZES[self.num_players]
         self.num_strikes = num_strikes or constants.NUM_STRIKES
+        self.clue_starved = clue_starved
 
         # normalize deck indices
         for (idx, card) in enumerate(self.deck):
@@ -140,6 +142,10 @@ class HanabiInstance():
     @property
     def max_score(self):
         return 5 * self.num_suits
+
+    @property
+    def clue_increment(self):
+        return 0.5 if self.clue_starved else 1
 
     # returns True if the instance has values matching hanabi-live rules
     # (i.e. standard + extra variants with 5 / 6 suits)
@@ -190,7 +196,7 @@ class GameState():
             case ActionType.ColorClue | ActionType.RankClue:
                 assert(self.clues > 0)
                 self.actions.append(action)
-                self.clues -= 1
+                self.clues -= self.instance.clue_increment
                 self.__make_turn()
                 # TODO: could check that the clue specified is in fact legal
             case ActionType.Play:
@@ -205,7 +211,7 @@ class GameState():
         if card.rank == self.stacks[card.suitIndex] + 1:
             self.stacks[card.suitIndex] += 1
             if card.rank == 5 and self.clues != 8:
-                self.clues += 1
+                self.clues += self.instance.clue_increment
         else:
             self.strikes += 1
             self.trash.append(self.instance.deck[card_idx])
@@ -218,7 +224,7 @@ class GameState():
     def discard(self, card_idx):
         assert(self.clues < 8)
         self.actions.append(Action(ActionType.Discard, target=card_idx))
-        self.clues += 1
+        self.clues += self.instance.clue_increment
         self.pace -= 1
         self.trash.append(self.instance.deck[card_idx])
         self.__replace(card_idx)
