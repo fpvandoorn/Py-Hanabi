@@ -85,19 +85,20 @@ class HanabiInstance():
             self,
             deck: List[DeckCard],               # assumes a default deck, every suit has to be distributed either [1,1,1,2,2,3,3,4,4,5] or [1,2,3,4,5]
             num_players: int,                   # number of players that play this deck, in range [2,6]
+
             hand_size: Optional[int]   = None,  # number of cards that each player holds
             num_strikes: Optional[int] = None,  # number of strikes that leads to game loss
             clue_starved: bool         = False, # if true, discarding and playing fives only gives back half a clue
-            variant_id: Optional[int]  = None   # optional: variant id of hanab.live, useful if instance gets exported to be viewed in browser
+            fives_give_clue: bool      = True,  # if false, then playing a five will not change the clue count
         ):
-        assert(2 <= num_players <= 6)
-        
+
         # defining properties
         self.deck = deck
         self.num_players = num_players
         self.hand_size = hand_size or constants.HAND_SIZES[self.num_players]
         self.num_strikes = num_strikes or constants.NUM_STRIKES
         self.clue_starved = clue_starved
+        self.fives_give_clue = fives_give_clue
 
         # normalize deck indices
         for (idx, card) in enumerate(self.deck):
@@ -119,9 +120,6 @@ class HanabiInstance():
                                + 8 + (self.num_suits - 1)                    \
                                + (-1 if self.num_players >= 5 else 0)
 
-        # TODO: set a meaningful default here for export?
-        self._variant_id: Optional[int] = variant_id
-
     @property
     def num_dealt_cards(self):
         return self.num_players * self.hand_size
@@ -131,36 +129,12 @@ class HanabiInstance():
         return self.deck_size - self.num_dealt_cards
 
     @property
-    def variant_id(self):
-        if self._variant_id is not None:
-            return self._variant_id
-        else:
-            # ensure no key error can happen
-            assert(self.is_standard())
-            return constants.VARIANT_IDS_STANDARD_DISTRIBUTIONS[self.num_suits][self.num_dark_suits]
-
-    @property
     def max_score(self):
         return 5 * self.num_suits
 
     @property
     def clue_increment(self):
         return 0.5 if self.clue_starved else 1
-
-    # returns True if the instance has values matching hanabi-live rules
-    # (i.e. standard + extra variants with 5 / 6 suits)
-    def is_standard(self):
-        return all([
-            2 <= self.num_players <= 6,
-            self.hand_size == constants.HAND_SIZES[self.num_players],
-            self.num_strikes == constants.NUM_STRIKES,
-            3 <= self.num_suits <= 6,
-            0 <= self.num_dark_suits <= 2,
-            4 <= self.num_suits - self.num_dark_suits or self.num_suits == 3
-            # TODO: check that variant id matches deck distribution
-            ]
-       )
-
 
 
 class GameState():
@@ -210,7 +184,7 @@ class GameState():
         card = self.instance.deck[card_idx]
         if card.rank == self.stacks[card.suitIndex] + 1:
             self.stacks[card.suitIndex] += 1
-            if card.rank == 5 and self.clues != 8:
+            if card.rank == 5 and self.clues != 8 and self.fives_give_clue:
                 self.clues += self.instance.clue_increment
         else:
             self.strikes += 1

@@ -304,7 +304,7 @@ def solve_sat(starting_state: GameState | HanabiInstance) -> Tuple[bool, Optiona
 
     model = get_model(constraints)
     if model:
-#        print_model(model, game_state, ls)
+        print_model(model, game_state, ls)
         solution = evaluate_model(model, copy.deepcopy(game_state), ls)
         return True, solution
     else:
@@ -355,11 +355,11 @@ def evaluate_model(model, cur_game_state: GameState, ls: Literals) -> GameState:
 
 
 def run_deck():
-    puzzle = False
+    puzzle = True
     if puzzle:
         deck_str = 'p5 p3 b4 r5 y4 y4 y5 r4 b2 y2 y3 g5 g2 g3 g4 p4 r3 b2 b3 b3 p4 b1 p2 b1 b1 p2 p1 p1 g1 r4 g1 r1 r3 r1 g1 r1 p1 b4 p3 g2 g3 g4 b5 y1 y1 y1 r2 r2 y2 y3'
 
-        deck = [DeckCard(COLORS.index(c[0]), int(c[1])) for c in deck_str.split(" ")]
+        deck = [DeckCard(COLOR_INITIALS.index(c[0]), int(c[1])) for c in deck_str.split(" ")]
         num_p = 5
     else:
         deck_str = "15gfvqluvuwaqnmrkpkaignlaxpjbmsprksfcddeybfixchuhtwo"

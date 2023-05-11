@@ -59,7 +59,7 @@ def check_game(game_id: int) -> Tuple[int, GameState]:
         return unsolvable_turn, solution
 
 if __name__ == "__main__":
-    game_id = 961092
+    game_id = 963339
     export_game(game_id)
     print("checking game {}".format(game_id))
     turn, sol = check_game(game_id)
