@@ -1,4 +1,5 @@
 import enum
+from typing import List
 
 from database import cur
 
@@ -38,13 +39,21 @@ class Suit:
         self.name = name
         self.display_name = display_name
         self.abbreviation = abbreviation
+
         self.rank_clues = ClueBehaviour(rank_clues)
         self.color_clues = ClueBehaviour(color_clues)
         self.prism = prism
+
         self.dark = dark
         self.reversed = rev
 
         self.colors = colors
+
+    def __str__(self):
+        return self.name
+
+    def __repr__(self):
+        return str(self.__dict__)
 
     @staticmethod
     def from_db(suit_id):
@@ -67,8 +76,8 @@ class Suit:
 class Variant:
     def __init__(
             self, name, clue_starved, throw_it_in_a_hole, alternating_clues, synesthesia, chimneys, funnels,
-            no_color_clues, no_rank_clues, odds_and_evens, up_or_down, critical_fours, num_suits, special_rank,
-            special_rank_ranks, special_rank_colors, suits
+            no_color_clues, no_rank_clues, odds_and_evens, up_or_down, critical_fours, special_rank,
+            special_rank_ranks, special_rank_colors, suits: List[Suit]
     ):
         self.name = name
         self.clue_starved = clue_starved
@@ -82,19 +91,27 @@ class Variant:
         self.odds_and_evens = odds_and_evens
         self.up_or_down = up_or_down
         self.critical_fours = critical_fours
-        self.num_suits = num_suits
+        self.num_suits = len(suits)
         self.special_rank = special_rank
         self.special_rank_ranks = special_rank_ranks
         self.special_rank_colors = special_rank_colors
 
         self.suits = suits
+        self.colors = []
+
+        for suit in self.suits:
+            for color in suit.colors:
+                if color not in self.colors:
+                    self.colors.append(color)
+
+        self.num_colors = len(self.colors)
 
     @staticmethod
     def from_db(var_id):
         cur.execute(
             "SELECT "
             "name, clue_starved, throw_it_in_a_hole, alternating_clues, synesthesia, chimneys, funnels, "
-            "no_color_clues, no_rank_clues, odds_and_evens, up_or_down, critical_fours, num_suits, special_rank, "
+            "no_color_clues, no_rank_clues, odds_and_evens, up_or_down, critical_fours, special_rank, "
             "special_rank_ranks, special_rank_colors "
             "FROM variants WHERE id = %s",
             (var_id,)
@@ -107,6 +124,6 @@ class Variant:
             "ORDER BY index",
             (var_id,)
         )
-        var_suits = list(map(lambda x: x[0], cur.fetchall()))
+        var_suits = [Suit.from_db(*s) for s in cur.fetchall()]
 
         return Variant(*var_properties, var_suits)
