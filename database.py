@@ -199,11 +199,12 @@ def init_static_tables():
             suit_id = cur.fetchone()
 
             for color in clue_colors:
-                cur.execute(
-                    "INSERT INTO colors (name) VALUES (%s)"
-                    "ON CONFLICT (name) DO NOTHING",
-                    (color,)
-                )
+                if not rev:
+                    cur.execute(
+                        "INSERT INTO colors (name) VALUES (%s)"
+                        "ON CONFLICT (name) DO NOTHING",
+                        (color,)
+                    )
                 cur.execute(
                     "SELECT id FROM colors WHERE name = %s",
                     (color,)
