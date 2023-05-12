@@ -1,5 +1,6 @@
 import enum
 from typing import List
+from hanabi import DeckCard, ActionType
 
 from database import cur
 
@@ -76,8 +77,8 @@ class Suit:
 class Variant:
     def __init__(
             self, name, clue_starved, throw_it_in_a_hole, alternating_clues, synesthesia, chimneys, funnels,
-            no_color_clues, no_rank_clues, odds_and_evens, up_or_down, critical_fours, special_rank,
-            special_rank_ranks, special_rank_colors, suits: List[Suit]
+            no_color_clues, no_rank_clues, empty_color_clues, empty_rank_clues, odds_and_evens, up_or_down,
+            critical_fours, special_rank, special_rank_ranks, special_rank_colors, suits: List[Suit]
     ):
         self.name = name
         self.clue_starved = clue_starved
@@ -88,6 +89,8 @@ class Variant:
         self.funnels = funnels
         self.no_color_clues = no_color_clues
         self.no_rank_clues = no_rank_clues
+        self.empty_color_clues = empty_color_clues
+        self.empty_rank_clues = empty_rank_clues
         self.odds_and_evens = odds_and_evens
         self.up_or_down = up_or_down
         self.critical_fours = critical_fours
@@ -99,20 +102,24 @@ class Variant:
         self.suits = suits
         self.colors = []
 
-        for suit in self.suits:
-            for color in suit.colors:
-                if color not in self.colors:
-                    self.colors.append(color)
+        if not self.no_color_clues:
+            for suit in self.suits:
+                for color in suit.colors:
+                    if color not in self.colors:
+                        self.colors.append(color)
 
         self.num_colors = len(self.colors)
+
+    def rank_touches(self, card: DeckCard, value: int):
+        pass
 
     @staticmethod
     def from_db(var_id):
         cur.execute(
             "SELECT "
             "name, clue_starved, throw_it_in_a_hole, alternating_clues, synesthesia, chimneys, funnels, "
-            "no_color_clues, no_rank_clues, odds_and_evens, up_or_down, critical_fours, special_rank, "
-            "special_rank_ranks, special_rank_colors "
+            "no_color_clues, no_rank_clues, empty_color_clues, empty_rank_clues, odds_and_evens, up_or_down,"
+            "critical_fours, special_rank, special_rank_ranks, special_rank_colors "
             "FROM variants WHERE id = %s",
             (var_id,)
         )

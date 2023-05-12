@@ -62,6 +62,8 @@ CREATE TABLE variants (
     funnels             BOOLEAN  NOT NULL DEFAULT FALSE,
     no_color_clues      BOOLEAN  NOT NULL DEFAULT FALSE,
     no_rank_clues       BOOLEAN  NOT NULL DEFAULT FALSE,
+    empty_color_clues   BOOLEAN  NOT NULL DEFAULT FALSE,
+    empty_rank_clues    BOOLEAN  NOT NULL DEFAULT FALSE,
     odds_and_evens      BOOLEAN  NOT NULL DEFAULT FALSE,
     up_or_down          BOOLEAN  NOT NULL DEFAULT FALSE,
     critical_fours      BOOLEAN  NOT NULL DEFAULT FALSE,

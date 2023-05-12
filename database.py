@@ -159,8 +159,10 @@ def init_static_tables():
         synesthesia = var.get('synesthesia', False)
         chimneys = var.get('chimneys', False)
         funnels = var.get('funnels', False)
-        no_color_clues = var.get('colorCluesTouchNothing', False)
-        no_rank_clues = var.get('rankCluesTouchNothing', False)
+        no_color_clues = var.get('clueColors', None) == []
+        no_rank_clues = var.get('clueRanks', None) == []
+        empty_color_clues = var.get('colorCluesTouchNothing', False)
+        empty_rank_clues = var.get('rankCluesTouchNothing', False)
         odds_and_evens = var.get('oddsAndEvens', False)
         up_or_down = var.get('upOrDown', False)
         critical_fours = var.get('criticalFours', False)
@@ -171,7 +173,6 @@ def init_static_tables():
         special_rank_no_colors = var.get('specialNoClueColors', False)
         special_rank_all_colors = var.get('specialAllClueColors', False)
         special_rank = var.get('specialRank', None)
-        clue_ranks = var.get('clueRanks', [1, 2, 3, 4, 5])
 
         assert(not all([special_rank_all_ranks, special_rank_no_ranks]))
         assert(not all([special_rank_all_colors, special_rank_no_colors]))
@@ -182,15 +183,15 @@ def init_static_tables():
         cur.execute(
             "INSERT INTO variants ("
             "id, name, clue_starved, throw_it_in_a_hole, alternating_clues, synesthesia, chimneys, funnels,"
-            "no_color_clues, no_rank_clues, odds_and_evens, up_or_down, critical_fours, num_suits, special_rank,"
-            "special_rank_ranks, special_rank_colors"
+            "no_color_clues, no_rank_clues, empty_color_clues, empty_rank_clues, odds_and_evens, up_or_down,"
+            "critical_fours, num_suits, special_rank, special_rank_ranks, special_rank_colors"
             ")"
             "VALUES"
-            "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (
                 var_id, name, clue_starved, throw_it_in_a_hole, alternating_clues, synesthesia, chimneys, funnels,
-                no_color_clues, no_rank_clues, odds_and_evens, up_or_down, critical_fours, num_suits, special_rank,
-                special_rank_ranks, special_rank_colors
+                no_color_clues, no_rank_clues, empty_color_clues, empty_rank_clues, odds_and_evens, up_or_down,
+                critical_fours, num_suits, special_rank, special_rank_ranks, special_rank_colors
             )
         )
 
