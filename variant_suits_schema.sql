@@ -13,14 +13,14 @@ CREATE TABLE suits (
       1: touched by actual rank of the cards
       2: touched by all ranks
     */
-    ranks             SMALLINT NOT NULL DEFAULT 1,
+    rank_clues        SMALLINT NOT NULL DEFAULT 1,
     /**
       This encodes how cards of this suit behave under color clues, we use:
       0: not touched by color,
       1: touched by native colors,
       2: touched by all colors
     */
-    colors            SMALLINT NOT NULL DEFAULT 1,
+    color_clues       SMALLINT NOT NULL DEFAULT 1,
     prism             BOOLEAN  NOT NULL DEFAULT FALSE,
     dark              BOOLEAN  NOT NULL DEFAULT FALSE,
     reversed          BOOLEAN  NOT NULL DEFAULT FALSE

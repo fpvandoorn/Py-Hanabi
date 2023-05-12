@@ -76,7 +76,7 @@ def init_static_tables():
             create = True
 
     if not create:
-        return
+        pass
 
     # init tables in database
     with open("variant_suits_schema.sql", "r") as f:
@@ -109,10 +109,10 @@ def init_static_tables():
         assert([all_colors, no_color_clues, prism].count(True) <= 1)
         assert(not all([no_rank_clues, all_ranks]))
 
-        colors = 2 if all_colors else (0 if no_color_clues else 1)
-        ranks = 2 if all_ranks else (0 if no_rank_clues else 1)
+        color_clues = 2 if all_colors else (0 if no_color_clues else 1)
+        rank_clues = 2 if all_ranks else (0 if no_rank_clues else 1)
 
-        clue_colors = suit.get('clueColors', [name] if (colors == 1 and not prism) else [])
+        clue_colors = suit.get('clueColors', [name] if (color_clues == 1 and not prism) else [])
 
         for rev in [False, True]:
             if rev is True and name not in suits_to_reverse:
@@ -120,10 +120,10 @@ def init_static_tables():
             suit_name = name
             suit_name += ' Reversed' if rev else ''
             cur.execute(
-                "INSERT INTO suits (name, display_name, abbreviation, ranks, colors, dark, reversed, prism)"
+                "INSERT INTO suits (name, display_name, abbreviation, rank_clues, color_clues, dark, reversed, prism)"
                 "VALUES"
                 "(%s, %s, %s, %s, %s, %s, %s, %s)",
-                (suit_name, display_name, abbreviation, ranks, colors, dark, rev, prism)
+                (suit_name, display_name, abbreviation, rank_clues, color_clues, dark, rev, prism)
             )
             cur.execute(
                 "SELECT id FROM suits WHERE name = %s",
