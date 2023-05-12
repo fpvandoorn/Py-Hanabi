@@ -1,8 +1,4 @@
-import json
-import os
-import networkx as nx
-from collections import OrderedDict
-import matplotlib.pyplot as plt
+import enum
 
 from database import cur
 
@@ -29,6 +25,43 @@ def num_suits(var_id):
         (var_id,)
     )
     return cur.fetchone()[0]
+
+
+class ClueBehaviour(enum.Enum):
+    none = 0
+    default = 1
+    all = 2
+
+
+class Suit:
+    def __init__(self, name, display_name, abbreviation, rank_clues, color_clues, prism, dark, rev, colors):
+        self.name = name
+        self.display_name = display_name
+        self.abbreviation = abbreviation
+        self.rank_clues = ClueBehaviour(rank_clues)
+        self.color_clues = ClueBehaviour(color_clues)
+        self.prism = prism
+        self.dark = dark
+        self.reversed = rev
+
+        self.colors = colors
+
+    @staticmethod
+    def from_db(suit_id):
+        cur.execute(
+            "SELECT name, display_name, abbreviation, rank_clues, color_clues, prism, dark, reversed "
+            "FROM suits "
+            "WHERE id = %s",
+            (suit_id,)
+        )
+        suit_properties = cur.fetchone()
+
+        cur.execute(
+            "SELECT color_id FROM suit_colors WHERE suit_id = %s",
+            (suit_id,)
+        )
+        colors = list(map(lambda t: t[0], cur.fetchall()))
+        return Suit(*suit_properties, colors)
 
 
 class Variant:
