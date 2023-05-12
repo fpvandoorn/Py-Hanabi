@@ -109,6 +109,18 @@ class Variant:
                     if color not in self.colors:
                         self.colors.append(color)
 
+        self.ranks = [1, 2, 3, 4, 5]
+        if self.special_rank and self.special_rank_ranks != ClueBehaviour.default:
+            self.ranks.remove(self.special_rank)
+        if self.odds_and_evens:
+            self.ranks = sorted([
+                next(i for i in self.ranks if i % 2 == 0),
+                next(i for i in self.ranks if i % 2 == 1)
+                ]
+            )
+        if self.no_rank_clues or self.synesthesia:
+            self.ranks = []
+
         self.num_colors = len(self.colors)
 
     def rank_touches(self, card: DeckCard, value: int):

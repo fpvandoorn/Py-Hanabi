@@ -56,7 +56,25 @@ CREATE TABLE variants (
     name                TEXT     NOT NULL UNIQUE,
     clue_starved        BOOLEAN  NOT NULL DEFAULT FALSE,
     throw_it_in_a_hole  BOOLEAN  NOT NULL DEFAULT FALSE,
+    /**
+      If set to true, the clue types (color, rank) have to be alternating during the game.
+      The type of the starting clue can still be freely chosen
+      Mutually exclusive with no_color_clues and no_rank_clues
+     */
     alternating_clues   BOOLEAN  NOT NULL DEFAULT FALSE,
+    /**
+      If set to true, no rank clues can be given
+      Instead, any color given is interpreted as a simultaneous rank clue at the same time,
+      where the colors correspond in order to the available ranks, wrapping around if necessary.
+      To be precise,
+      if (r_1, r_2, ..., r_k)  are the available rank clues in the variant
+      and (c_1, c_2, ..., c_l) are the available color clues in the variant,
+      then color clue c_i will be interpreted simultaneously as all rank clues r_j with i == j (mod l).
+      Note that this means that if there are more colors clues than rank clues,
+      some color clues are not hybrid rank clues, and conversely, if there are less color clues than rank clues,
+      then some colors will be interpreted as multiple rank clues at the same time.
+      Mutually exclusive with no_color_clues
+     */
     synesthesia         BOOLEAN  NOT NULL DEFAULT FALSE,
     chimneys            BOOLEAN  NOT NULL DEFAULT FALSE,
     funnels             BOOLEAN  NOT NULL DEFAULT FALSE,
@@ -93,7 +111,16 @@ CREATE TABLE variants (
       If set, special_rank_ranks has to be set to 1
      */
     special_deceptive   BOOLEAN NOT NULL DEFAULT FALSE,
-    CHECK (special_rank_ranks = 1 OR special_deceptive IS FALSE)
+    CHECK (special_rank_ranks = 1  OR special_deceptive IS FALSE),
+    CHECK (funnels        IS FALSE OR chimneys          IS FALSE),
+    CHECK (funnels        IS FALSE OR odds_and_evens    IS FALSE),
+    CHECK (chimneys       IS FALSE OR odds_and_evens    IS FALSE),
+    CHECK (no_rank_clues  IS FALSE OR empty_rank_clues  IS FALSE),
+    CHECK (no_color_clues IS FALSE OR empty_color_clues IS FALSE),
+    CHECK (no_color_clues IS FALSE OR no_rank_clues     IS FALSE),
+    CHECK (no_rank_clues  IS FALSE OR alternating_clues IS FALSE),
+    CHECK (no_color_clues IS FALSE OR alternating_clues IS FALSE),
+    CHECK (no_color_clues IS FALSE OR synesthesia       IS FALSE)
 );
 CREATE INDEX variants_name_idx ON variants (name);
 
