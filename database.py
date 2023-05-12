@@ -62,88 +62,6 @@ def create_seeds_table():
         conn.commit()
 
 
-def create_static_tables():
-    cur.execute("DROP TABLE IF EXISTS suits CASCADE;")
-    cur.execute(
-        "CREATE TABLE suits ("
-        "id                SERIAL PRIMARY KEY,"
-        "name              TEXT     NOT NULL UNIQUE,"
-        "display_name      TEXT     NOT NULL,"
-        "abbreviation      CHAR(1)  NOT NULL,"
-        "ranks             SMALLINT NOT NULL,"  # 0: not touched by rank,  1: touched by actual rank,   2: touched by all ranks
-        "colors            SMALLINT NOT NULL,"  # 0: not touched by color, 1: touched by native colors, 2: touched by all colors
-        "prism             BOOLEAN  NOT NULL,"
-        "dark              BOOLEAN  NOT NULL,"
-        "reversed          BOOLEAN  NOT NULL"
-        ")"
-    )
-    cur.execute(
-        "CREATE INDEX suits_name_idx ON suits (name)"
-    )
-
-    cur.execute("DROP TABLE IF EXISTS colors CASCADE;")
-    cur.execute(
-        "CREATE TABLE colors ("
-        "id       SERIAL PRIMARY KEY,"
-        "name     TEXT NOT NULL UNIQUE"
-        ")"
-    )
-    cur.execute(
-        "CREATE INDEX colors_name_idx ON colors (name)"
-    )
-
-    cur.execute("DROP TABLE IF EXISTS suit_colors CASCADE;")
-    cur.execute(
-        "CREATE TABLE suit_colors ("
-        "suit_id  INTEGER NOT NULL,"
-        "color_id INTEGER NOT NULL,"
-        "FOREIGN KEY (suit_id)  REFERENCES suits  (id) ON DELETE CASCADE,"
-        "FOREIGN KEY (color_id) REFERENCES colors (id) ON DELETE CASCADE,"
-        "UNIQUE (suit_id, color_id)"
-        ")"
-    )
-
-    cur.execute("DROP TABLE IF EXISTS variants CASCADE")
-    cur.execute(
-        "CREATE TABLE variants ("
-        "id                  SERIAL PRIMARY KEY,"
-        "name                TEXT     NOT NULL UNIQUE,"
-        "clue_starved        BOOLEAN  NOT NULL,"
-        "throw_it_in_a_hole  BOOLEAN  NOT NULL,"
-        "alternating_clues   BOOLEAN  NOT NULL,"
-        "synesthesia         BOOLEAN  NOT NULL,"
-        "chimneys            BOOLEAN  NOT NULL,"
-        "funnels             BOOLEAN  NOT NULL,"
-        "no_colors           BOOLEAN  NOT NULL,"
-        "no_ranks            BOOLEAN  NOT NULL,"
-        "odds_and_evens      BOOLEAN  NOT NULL,"
-        "up_or_down          BOOLEAN  NOT NULL,"
-        "critical_fours      BOOLEAN  NOT NULL,"
-        "num_suits           SMALLINT NOT NULL,"
-        "special_rank_ranks  SMALLINT NOT NULL,"
-        "special_rank_colors SMALLINT NOT NULL,"
-        "special_rank        SMALLINT"
-        ")"
-    )
-    cur.execute(
-        "CREATE INDEX variants_name_idx ON variants (name)"
-    )
-
-    cur.execute("DROP TABLE IF EXISTS variant_suits CASCADE")
-    cur.execute(
-        "CREATE TABLE variant_suits ("
-        "variant_id   INT NOT NULL,"
-        "suit_id      INT NOT NULL,"
-        "index        SMALLINT NOT NULL,"
-        "FOREIGN KEY (variant_id) REFERENCES variants (id) ON DELETE CASCADE,"
-        "FOREIGN KEY (suit_id)    REFERENCES suits    (id) ON DELETE CASCADE,"
-        "UNIQUE (variant_id, suit_id),"
-        "UNIQUE (variant_id, index)"
-        ")"
-    )
-    conn.commit()
-
-
 def init_static_tables():
     # check if table already exists
 
@@ -160,7 +78,9 @@ def init_static_tables():
     if not create:
         return
 
-    create_static_tables()
+    # init tables in database
+    with open("variant_suits_schema.sql", "r") as f:
+        cur.execute(f.read())
 
     with open("suits.json", "r") as f:
         suits: Dict = json.loads(f.read())
@@ -180,17 +100,17 @@ def init_static_tables():
         abbreviation = suit.get('abbreviation', name[0].upper())
 
         all_colors = suit.get('allClueColors', False)
-        no_colors = suit.get('noClueColors', False)
+        no_color_clues = suit.get('noClueColors', False)
         all_ranks = suit.get('allClueRanks', False)
-        no_ranks = suit.get('noClueRanks', False)
+        no_rank_clues = suit.get('noClueRanks', False)
         prism = suit.get('prism', False)
         dark = suit.get('oneOfEach', False)
 
-        assert([all_colors, no_colors, prism].count(True) <= 1)
-        assert(not all([no_ranks, all_ranks]))
+        assert([all_colors, no_color_clues, prism].count(True) <= 1)
+        assert(not all([no_rank_clues, all_ranks]))
 
-        colors = 2 if all_colors else (0 if no_colors else 1)
-        ranks = 2 if all_ranks else (0 if no_ranks else 1)
+        colors = 2 if all_colors else (0 if no_color_clues else 1)
+        ranks = 2 if all_ranks else (0 if no_rank_clues else 1)
 
         clue_colors = suit.get('clueColors', [name] if (colors == 1 and not prism) else [])
 
@@ -239,8 +159,8 @@ def init_static_tables():
         synesthesia = var.get('synesthesia', False)
         chimneys = var.get('chimneys', False)
         funnels = var.get('funnels', False)
-        no_colors = var.get('colorCluesTouchNothing', False)
-        no_ranks = var.get('rankCluesTouchNothing', False)
+        no_color_clues = var.get('colorCluesTouchNothing', False)
+        no_rank_clues = var.get('rankCluesTouchNothing', False)
         odds_and_evens = var.get('oddsAndEvens', False)
         up_or_down = var.get('upOrDown', False)
         critical_fours = var.get('criticalFours', False)
@@ -261,16 +181,16 @@ def init_static_tables():
 
         cur.execute(
             "INSERT INTO variants ("
-            "id, name, clue_starved, throw_it_in_a_hole, alternating_clues, synesthesia, chimneys, funnels, no_colors,"
-            "no_ranks, odds_and_evens, up_or_down, critical_fours, num_suits, special_rank_ranks, special_rank_colors,"
-            "special_rank"
+            "id, name, clue_starved, throw_it_in_a_hole, alternating_clues, synesthesia, chimneys, funnels,"
+            "no_color_clues, no_rank_clues, odds_and_evens, up_or_down, critical_fours, num_suits, special_rank,"
+            "special_rank_ranks, special_rank_colors"
             ")"
             "VALUES"
             "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (
                 var_id, name, clue_starved, throw_it_in_a_hole, alternating_clues, synesthesia, chimneys, funnels,
-                no_colors, no_ranks, odds_and_evens, up_or_down, critical_fours, num_suits, special_rank_ranks,
-                special_rank_colors, special_rank
+                no_color_clues, no_rank_clues, odds_and_evens, up_or_down, critical_fours, num_suits, special_rank,
+                special_rank_ranks, special_rank_colors
             )
         )
 
