@@ -77,6 +77,9 @@ def create_static_tables():
         "reversed          BOOLEAN  NOT NULL"
         ")"
     )
+    cur.execute(
+        "CREATE INDEX suits_name_idx ON suits (name)"
+    )
 
     cur.execute("DROP TABLE IF EXISTS colors CASCADE;")
     cur.execute(
@@ -85,6 +88,9 @@ def create_static_tables():
         "name     TEXT NOT NULL UNIQUE"
         ")"
     )
+    cur.execute(
+        "CREATE INDEX colors_name_idx ON colors (name)"
+    )
 
     cur.execute("DROP TABLE IF EXISTS suit_colors CASCADE;")
     cur.execute(
@@ -92,7 +98,8 @@ def create_static_tables():
         "suit_id  INTEGER NOT NULL,"
         "color_id INTEGER NOT NULL,"
         "FOREIGN KEY (suit_id)  REFERENCES suits  (id) ON DELETE CASCADE,"
-        "FOREIGN KEY (color_id) REFERENCES colors (id) ON DELETE CASCADE"
+        "FOREIGN KEY (color_id) REFERENCES colors (id) ON DELETE CASCADE,"
+        "UNIQUE (suit_id, color_id)"
         ")"
     )
 
@@ -118,14 +125,20 @@ def create_static_tables():
         "special_rank        SMALLINT"
         ")"
     )
+    cur.execute(
+        "CREATE INDEX variants_name_idx ON variants (name)"
+    )
 
     cur.execute("DROP TABLE IF EXISTS variant_suits CASCADE")
     cur.execute(
         "CREATE TABLE variant_suits ("
         "variant_id   INT NOT NULL,"
         "suit_id      INT NOT NULL,"
+        "index        SMALLINT NOT NULL,"
         "FOREIGN KEY (variant_id) REFERENCES variants (id) ON DELETE CASCADE,"
-        "FOREIGN KEY (suit_id)    REFERENCES suits    (id) ON DELETE CASCADE"
+        "FOREIGN KEY (suit_id)    REFERENCES suits    (id) ON DELETE CASCADE,"
+        "UNIQUE (variant_id, suit_id),"
+        "UNIQUE (variant_id, index)"
         ")"
     )
     conn.commit()
@@ -261,7 +274,7 @@ def init_static_tables():
             )
         )
 
-        for suit in suits:
+        for index, suit in enumerate(suits):
             cur.execute(
                 "SELECT id FROM suits WHERE name = %s",
                 (suit,)
@@ -271,8 +284,8 @@ def init_static_tables():
                 print(suit)
 
             cur.execute(
-                "INSERT INTO variant_suits (variant_id, suit_id) VALUES (%s, %s)",
-                (var_id, suit_id)
+                "INSERT INTO variant_suits (variant_id, suit_id, index) VALUES (%s, %s, %s)",
+                (var_id, suit_id, index)
             )
 
     conn.commit()
