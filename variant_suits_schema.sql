@@ -84,7 +84,16 @@ CREATE TABLE variants (
       Encodes how cards of the special rank (if present) are touched by colorss,
       in the same manner how we encoded in @table suits
      */
-    special_rank_colors SMALLINT NOT NULL DEFAULT 1
+    special_rank_colors SMALLINT NOT NULL DEFAULT 1,
+    /**
+      If set to true, then cards of the special rank
+      will appear as different ranks depending on their suit:
+      The rank values touching the deceptive special rank are chosen consecutively (starting from smallest)
+      among all available ranks in the order of the suits of the variant, wrapping around if necessary.
+      If set, special_rank_ranks has to be set to 1
+     */
+    special_deceptive   BOOLEAN NOT NULL DEFAULT FALSE,
+    CHECK (special_rank_ranks = 1 OR special_deceptive IS FALSE)
 );
 CREATE INDEX variants_name_idx ON variants (name);
 

@@ -78,7 +78,7 @@ class Variant:
     def __init__(
             self, name, clue_starved, throw_it_in_a_hole, alternating_clues, synesthesia, chimneys, funnels,
             no_color_clues, no_rank_clues, empty_color_clues, empty_rank_clues, odds_and_evens, up_or_down,
-            critical_fours, special_rank, special_rank_ranks, special_rank_colors, suits: List[Suit]
+            critical_fours, special_rank, special_rank_ranks, special_rank_colors, special_deceptive, suits: List[Suit]
     ):
         self.name = name
         self.clue_starved = clue_starved
@@ -98,6 +98,7 @@ class Variant:
         self.special_rank = special_rank
         self.special_rank_ranks = special_rank_ranks
         self.special_rank_colors = special_rank_colors
+        self.special_deceptive = special_deceptive
 
         self.suits = suits
         self.colors = []
@@ -119,7 +120,7 @@ class Variant:
             "SELECT "
             "name, clue_starved, throw_it_in_a_hole, alternating_clues, synesthesia, chimneys, funnels, "
             "no_color_clues, no_rank_clues, empty_color_clues, empty_rank_clues, odds_and_evens, up_or_down,"
-            "critical_fours, special_rank, special_rank_ranks, special_rank_colors "
+            "critical_fours, special_rank, special_rank_ranks, special_rank_colors, special_deceptive "
             "FROM variants WHERE id = %s",
             (var_id,)
         )

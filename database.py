@@ -173,6 +173,7 @@ def init_static_tables():
         special_rank_no_colors = var.get('specialNoClueColors', False)
         special_rank_all_colors = var.get('specialAllClueColors', False)
         special_rank = var.get('specialRank', None)
+        special_deceptive = var.get('specialDeceptive', False)
 
         assert(not all([special_rank_all_ranks, special_rank_no_ranks]))
         assert(not all([special_rank_all_colors, special_rank_no_colors]))
@@ -184,14 +185,14 @@ def init_static_tables():
             "INSERT INTO variants ("
             "id, name, clue_starved, throw_it_in_a_hole, alternating_clues, synesthesia, chimneys, funnels,"
             "no_color_clues, no_rank_clues, empty_color_clues, empty_rank_clues, odds_and_evens, up_or_down,"
-            "critical_fours, num_suits, special_rank, special_rank_ranks, special_rank_colors"
+            "critical_fours, num_suits, special_rank, special_rank_ranks, special_rank_colors, special_deceptive"
             ")"
             "VALUES"
-            "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (
                 var_id, name, clue_starved, throw_it_in_a_hole, alternating_clues, synesthesia, chimneys, funnels,
                 no_color_clues, no_rank_clues, empty_color_clues, empty_rank_clues, odds_and_evens, up_or_down,
-                critical_fours, num_suits, special_rank, special_rank_ranks, special_rank_colors
+                critical_fours, num_suits, special_rank, special_rank_ranks, special_rank_colors, special_deceptive
             )
         )
 
