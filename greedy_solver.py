@@ -6,7 +6,7 @@ from time import sleep
 
 from hanabi import DeckCard, Action, ActionType, GameState, HanabiInstance
 from compress import link, decompress_deck
-from database import conn
+from database.database import conn
 
 
 class CardType(Enum):
@@ -168,9 +168,9 @@ def test():
     print(link(gs.to_json()))
 
 
-wins = open("won_seeds.txt", "a")
-losses = open("lost_seeds.txt", "a")
-crits = open("crits_lost.txt", "a")
+# wins = open("won_seeds.txt", "a")
+# losses = open("lost_seeds.txt", "a")
+# crits = open("crits_lost.txt", "a")
 
 
 def run_deck(seed, num_players, deck_str):
