@@ -7,9 +7,6 @@ from compress import compress_deck, compress_actions, DeckCard, Action, InvalidF
 from variants import variant_id, variant_name
 from hanab_live import HanabLiveInstance, HanabLiveGameState
 
-with open('variants.json') as f:
-    variants = json.loads(f.read())
-
 
 #
 def detailed_export_game(game_id: int, score: Optional[int] = None, seed_exists: bool = False) -> None:
