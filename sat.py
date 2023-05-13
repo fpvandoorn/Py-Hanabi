@@ -326,8 +326,8 @@ def print_model(model, cur_game_state, ls: Literals):
         print('=== move {} ==='.format(m))
         print('clues: ' + ''.join(str(i) for i in range(1, 9) if model.get_py_value(ls.clues[m][i])))
         print('strikes: ' + ''.join(str(i) for i in range(1, 3) if model.get_py_value(ls.strikes[m][i])))
-        print('draw: ' + ', '.join('{}: {}'.format(i, deck[i]) for i in range(cur_game_state.progress, 50) if model.get_py_value(ls.draw[m][i])))
-        print('discard: ' + ', '.join('{}: {}'.format(i, deck[i]) for i in range(50) if model.get_py_value(ls.discard[m][i])))
+        print('draw: ' + ', '.join('{}: {}'.format(i, deck[i]) for i in range(cur_game_state.progress, cur_game_state.instance.deck_size) if model.get_py_value(ls.draw[m][i])))
+        print('discard: ' + ', '.join('{}: {}'.format(i, deck[i]) for i in range(cur_game_state.instance.deck_size) if model.get_py_value(ls.discard[m][i])))
         for s in range(0, cur_game_state.instance.num_suits):
             print('progress {}: '.format(COLOR_INITIALS[s]) + ''.join(str(r) for r in range(1, 6) if model.get_py_value(ls.progress[m][s, r])))
         flags = ['discard_any', 'draw_any', 'play', 'play5', 'incr_clues', 'strike', 'extraround', 'dummyturn']
