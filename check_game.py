@@ -6,7 +6,7 @@ from compress import decompress_deck, decompress_actions, compress_actions, link
 from hanabi import Action, GameState
 from hanab_live import HanabLiveInstance, HanabLiveGameState
 from sat import solve_sat
-from download_data import export_game
+from download_data import detailed_export_game
 
 
 # returns number of first turn before which the game was infeasible (counting from 0)
@@ -58,15 +58,3 @@ def check_game(game_id: int) -> Tuple[int, GameState]:
 
         assert(unsolvable_turn - 1 == solvable_turn)
         return unsolvable_turn, solution
-
-
-if __name__ == "__main__":
-    game_id = 921269
-    export_game(game_id)
-    print("checking game {}".format(game_id))
-    turn, sol = check_game(game_id)
-    if turn != 0:
-        print(turn, link(sol))
-    else:
-        print("instance is unfeasible")
-    pass

@@ -3,12 +3,16 @@ import requests
 import requests_cache
 
 
-## Cache all requests to site to reduce traffic and latency
+# Cache all requests to site to reduce traffic and latency
 session = requests_cache.CachedSession('hanab.live')
 
+
 def get(url):
-#    print("sending request for " + url)
-    response =  session.get("https://hanab.live/" + url)
+    #    print("sending request for " + url)
+    query = "https://hanab.live/" + url
+    response = session.get(query)
+    if not response:
+        raise RuntimeError("Failed to get request {} from hanab.live".format(query))
     if not response.status_code == 200:
         return None
     if "application/json" in response.headers['content-type']:

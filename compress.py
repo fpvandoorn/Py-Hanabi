@@ -88,7 +88,7 @@ def decompress_actions(actions_str: str) -> List[Action]:
         except ValueError as e:
             raise InvalidFormatError(
                     "Invalid action type at action {}: Found {}, expected one of {}".format(
-                        index, actionTypeValue,
+                        index, action_type_value,
                         [action_type.value for action_type in ActionType]
                         )
             ) from e
@@ -165,8 +165,8 @@ def decompress_deck(deck_str: str) -> List[DeckCard]:
 # The GameState object has to be standard / fitting hanab.live variants,
 # otherwise compression is not possible
 def compress_game_state(state: GameState) -> str:
-    if not state.instance.is_standard():
-        raise ValueError("Cannot compress non-standard hanabi instance")
+#    if not state.instance.is_standard():
+#        raise ValueError("Cannot compress non-standard hanabi instance")
     out = "{}{},{},{}".format(
             state.instance.num_players,
             compress_deck(state.instance.deck),
