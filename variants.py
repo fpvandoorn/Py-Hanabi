@@ -1,32 +1,38 @@
 import enum
-from typing import List
+from typing import List, Optional
 from hanabi import DeckCard, ActionType
 
 from database.database import cur
 
 
-def variant_id(name):
+def variant_id(name) -> Optional[int]:
     cur.execute(
         "SELECT id FROM variants WHERE name = %s",
         (name,)
     )
-    return cur.fetchone()[0]
+    var_id = cur.fetchone()
+    if var_id is not None:
+        return var_id[0]
 
 
-def variant_name(var_id):
+def variant_name(var_id) -> Optional[int]:
     cur.execute(
         "SELECT name FROM variants WHERE id = %s",
         (var_id,)
     )
-    return cur.fetchone()[0]
+    name = cur.fetchone()
+    if name is not None:
+        return name[0]
 
 
-def num_suits(var_id):
+def num_suits(var_id) -> Optional[int]:
     cur.execute(
         "SELECT num_suits FROM variants WHERE id = %s",
         (var_id,)
     )
-    return cur.fetchone()[0]
+    num = cur.fetchone()
+    if num is not None:
+        return num
 
 
 class ClueBehaviour(enum.Enum):
