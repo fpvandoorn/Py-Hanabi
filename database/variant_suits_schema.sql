@@ -131,12 +131,17 @@ CREATE INDEX variants_name_idx ON variants (name);
  */
 DROP TABLE IF EXISTS variant_suits CASCADE;
 CREATE TABLE variant_suits (
-    variant_id   INT NOT NULL,
-    suit_id      INT NOT NULL,
+    variant_id   INT NOT NULL REFERENCES variants ON DELETE CASCADE,
+    suit_id      INT NOT NULL REFERENCES suits    ON DELETE RESTRICT,
     index        SMALLINT NOT NULL,
-    FOREIGN KEY (variant_id) REFERENCES variants (id) ON DELETE CASCADE,
-    FOREIGN KEY (suit_id)    REFERENCES suits    (id) ON DELETE CASCADE,
     UNIQUE (variant_id, suit_id),
     UNIQUE (variant_id, index)
 );
 CREATE INDEX variant_suits_index ON variant_suits (variant_id, index);
+
+
+DROP TABLE IF EXISTS variant_game_downloads CASCADE;
+CREATE TABLE variant_game_downloads (
+    variant_id   INT PRIMARY KEY REFERENCES variants ON DELETE CASCADE,
+    last_game_id INT NOT NULL
+)
