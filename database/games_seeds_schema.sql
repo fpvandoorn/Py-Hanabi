@@ -3,7 +3,7 @@ CREATE TABLE seeds (
     seed                    TEXT        NOT NULL PRIMARY KEY,
     num_players             SMALLINT    NOT NULL,
     variant_id              SMALLINT    NOT NULL,
-    deck                    VARCHAR(60) NOT NULL,
+    deck                    VARCHAR(62) NOT NULL,
     feasible                BOOLEAN     DEFAULT NULL,
     max_score_theoretical   SMALLINT
 );
