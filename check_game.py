@@ -1,7 +1,7 @@
 import copy
 from typing import Tuple, Optional
 
-from database import conn
+from database.database import conn
 from compress import decompress_deck, decompress_actions, compress_actions, link
 from hanabi import Action, GameState
 from hanab_live import HanabLiveInstance, HanabLiveGameState
