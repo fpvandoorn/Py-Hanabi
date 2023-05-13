@@ -4,7 +4,7 @@
 # some values shared by all (default) hanabi instances
 HAND_SIZES = {2: 5, 3: 5, 4: 4, 5: 4, 6: 3}
 NUM_STRIKES = 3
-COLOR_INITIALS = 'rygbp'
+COLOR_INITIALS = 'rygbpt'
 PLAYER_NAMES = ["Alice", "Bob", "Cathy", "Donald", "Emily", "Frank"]
 
 
