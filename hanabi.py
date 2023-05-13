@@ -5,7 +5,7 @@ from termcolor import colored
 import constants
 
 
-class DeckCard():
+class DeckCard:
     def __init__(self, suitIndex: int, rank: int, deck_index=None):
         self.suitIndex: int = suitIndex
         self.rank: int = rank
@@ -29,9 +29,9 @@ class DeckCard():
         # should be injective enough, we never use cards with ranks differing by 1000
         return 1000 * self.suitIndex + self.rank
 
+
 def pp_deck(deck: List[DeckCard]) -> str:
     return "[" + ", ".join(card.colorize() for card in deck) + "]"
-
 
 
 class ActionType(Enum):
@@ -40,10 +40,10 @@ class ActionType(Enum):
     ColorClue = 2
     RankClue = 3
     EndGame = 4
-    VoteTerminate = 5 ## hack: online, this is encoded as a 10
+    VoteTerminate = 5  ## hack: online, this is encoded as a 10
 
 
-class Action():
+class Action:
     def __init__(self, type_: ActionType, target: int, value: Optional[int] = None):
         self.type = type_
         self.target = target
@@ -55,10 +55,10 @@ class Action():
     @staticmethod
     def from_json(action):
         return Action(
-                ActionType(action['type']),
-                int(action['target']),
-                action.get('value', None)
-                )
+            ActionType(action['type']),
+            int(action['target']),
+            action.get('value', None)
+        )
 
     def __repr__(self):
         match self.type:
@@ -83,15 +83,15 @@ class Action():
 class HanabiInstance():
     def __init__(
             self,
-            deck: List[DeckCard],               # assumes a default deck, every suit has to be distributed either [1,1,1,2,2,3,3,4,4,5] or [1,2,3,4,5]
-            num_players: int,                   # number of players that play this deck, in range [2,6]
+            deck: List[DeckCard],
+            # assumes a default deck, every suit has to be distributed either [1,1,1,2,2,3,3,4,4,5] or [1,2,3,4,5]
+            num_players: int,  # number of players that play this deck, in range [2,6]
 
-            hand_size: Optional[int]   = None,  # number of cards that each player holds
+            hand_size: Optional[int] = None,  # number of cards that each player holds
             num_strikes: Optional[int] = None,  # number of strikes that leads to game loss
-            clue_starved: bool         = False, # if true, discarding and playing fives only gives back half a clue
-            fives_give_clue: bool      = True,  # if false, then playing a five will not change the clue count
-        ):
-
+            clue_starved: bool = False,  # if true, discarding and playing fives only gives back half a clue
+            fives_give_clue: bool = True,  # if false, then playing a five will not change the clue count
+    ):
         # defining properties
         self.deck = deck
         self.num_players = num_players
@@ -110,15 +110,16 @@ class HanabiInstance():
         self.player_names = constants.PLAYER_NAMES[:self.num_players]
         self.deck_size = len(self.deck)
 
-        ## maximum number of moves in any game that can achieve max score
-        # each suit gives 15 moves, as we can play and discard 5 cards each and give 5 clues. dark suits only give 5 moves, since no discards are added
-        # number of cards that remain in players hands after end of game. they cost 2 turns each, since we cannot discard them and also have one clue less
-        # 8 clues at beginning, one further clue for each suit but one (the clue of the last 5 is never useful since it is gained in the extra-round)
-        # subtract a further move for a second 5-clue that can't be used in 5 or 6-player games, since the extraround starts too soon
-        self.max_winning_moves = 15 * self.num_suits - 10 * self.num_dark_suits    \
-                               - 2 * self.num_players * (self.hand_size - 1) \
-                               + 8 + (self.num_suits - 1)                    \
-                               + (-1 if self.num_players >= 5 else 0)
+        # # maximum number of moves in any game that can achieve max score each suit gives 15 moves, as we can play
+        # and discard 5 cards each and give 5 clues. dark suits only give 5 moves, since no discards are added number
+        # of cards that remain in players hands after end of game. they cost 2 turns each, since we cannot discard
+        # them and also have one clue less 8 clues at beginning, one further clue for each suit but one (the clue of
+        # the last 5 is never useful since it is gained in the extra-round) subtract a further move for a second
+        # 5-clue that can't be used in 5 or 6-player games, since the extraround starts too soon
+        self.max_winning_moves = 15 * self.num_suits - 10 * self.num_dark_suits \
+                                 - 2 * self.num_players * (self.hand_size - 1) \
+                                 + 8 + (self.num_suits - 1) \
+                                 + (-1 if self.num_players >= 5 else 0)
 
     @property
     def num_dealt_cards(self):
@@ -143,80 +144,59 @@ class GameState():
         self.instance = instance
 
         # dynamic game state
-        self.progress = self.instance.num_players * self.instance.hand_size     # index of next card to be drawn
-        self.hands = [self.instance.deck[self.instance.hand_size * p : self.instance.hand_size * (p+1)] for p in range(0, self.instance.num_players)]
+        self.progress = self.instance.num_players * self.instance.hand_size  # index of next card to be drawn
+        self.hands = [self.instance.deck[self.instance.hand_size * p: self.instance.hand_size * (p + 1)] for p in
+                      range(0, self.instance.num_players)]
         self.stacks = [0 for i in range(0, self.instance.num_suits)]
         self.strikes = 0
         self.clues = 8
         self.turn = 0
-        self.pace = self.instance.deck_size - 5 * self.instance.num_suits  - self.instance.num_players * (self.instance.hand_size - 1)
+        self.pace = self.instance.deck_size - 5 * self.instance.num_suits - self.instance.num_players * (
+                self.instance.hand_size - 1)
         self.remaining_extra_turns = self.instance.num_players + 1
         self.trash = []
 
         # can be set to true if game is known to be in a lost state
         self.in_lost_state = False
 
-        # automatically set upon third strike, when extar round is over or when explicitly taking EndGame or VoteTerminate actions
+        # automatically set upon third strike, when extar round is over or when explicitly taking EndGame or
+        # VoteTerminate actions
         self.over = False
 
         # will track replay as game progresses
         self.actions = []
 
-
-    ## Methods to control game state change
-
-    def make_action(self, action):
-        match action.type:
-            case ActionType.ColorClue | ActionType.RankClue:
-                assert(self.clues > 0)
-                self.actions.append(action)
-                self.clues -= self.instance.clue_increment
-                self.__make_turn()
-                # TODO: could check that the clue specified is in fact legal
-            case ActionType.Play:
-                self.play(action.target)
-            case ActionType.Discard:
-                self.discard(action.target)
-            case ActionType.EndGame | ActionType.VoteTerminate:
-                self.over = True
+    # Methods to control game state change
 
     def play(self, card_idx):
         card = self.instance.deck[card_idx]
         if card.rank == self.stacks[card.suitIndex] + 1:
             self.stacks[card.suitIndex] += 1
-            if card.rank == 5 and self.clues != 8 and self.fives_give_clue:
+            if card.rank == 5 and self.clues != 8 and self.instance.fives_give_clue:
                 self.clues += self.instance.clue_increment
         else:
             self.strikes += 1
             self.trash.append(self.instance.deck[card_idx])
         self.actions.append(Action(ActionType.Play, target=card_idx))
-        self.__replace(card_idx)
-        self.__make_turn()
+        self._replace(card_idx)
+        self._make_turn()
         if all(s == 5 for s in self.stacks) or self.strikes >= self.instance.num_strikes:
             self.over = True
 
     def discard(self, card_idx):
-        assert(self.clues < 8)
+        assert (self.clues < 8)
         self.actions.append(Action(ActionType.Discard, target=card_idx))
         self.clues += self.instance.clue_increment
         self.pace -= 1
         self.trash.append(self.instance.deck[card_idx])
-        self.__replace(card_idx)
-        self.__make_turn()
+        self._replace(card_idx)
+        self._make_turn()
 
     def clue(self):
-        assert(self.clues > 0)
-        self.actions.append(
-                Action(
-                    ActionType.RankClue,
-                    target=(self.turn +1) % self.instance.num_players,                    # clue next plyaer
-                    value=self.hands[(self.turn +1) % self.instance.num_players][0].rank  # clue index 0
-                )
-        )
+        assert (self.clues > 0)
+        self.actions.append(self._waste_clue())
         self.clues -= 1
-        self.__make_turn()
-    
-
+        self._make_turn()
 
     # Forward some properties of the underlying instance
     @property
@@ -243,9 +223,8 @@ class GameState():
     def deck_size(self):
         return self.instance.deck_size
 
-
     # Properties of GameState
-    
+
     def is_over(self):
         return self.over or self.is_known_lost()
 
@@ -264,7 +243,6 @@ class GameState():
     @property
     def cur_hand(self):
         return self.hands[self.turn]
-    
 
     # Utilities
 
@@ -273,14 +251,13 @@ class GameState():
             if card in hand:
                 yield player
 
-
     def to_json(self):
         # ensure we have at least one action
         if len(self.actions) == 0:
             self.actions.append(Action(
                 ActionType.EndGame,
                 target=0
-                )
+            )
             )
         return {
             "deck": self.instance.deck,
@@ -289,14 +266,14 @@ class GameState():
             "first_player": 0,
             "options": {
                 "variant": "No Variant",
-                }
             }
-    
+        }
+
     # Private helpers
-    
+
     # increments turn counter and tracks extra round
-    def __make_turn(self):
-        assert(not self.over)
+    def _make_turn(self):
+        assert (not self.over)
         self.turn = (self.turn + 1) % self.instance.num_players
         if self.progress == self.instance.deck_size:
             self.remaining_extra_turns -= 1
@@ -304,10 +281,10 @@ class GameState():
                 self.over = True
 
     # replaces the specified card (has to be in current player's hand) with the next card of the deck (if nonempty)
-    def __replace(self, card_idx):
+    def _replace(self, card_idx):
         idx_in_hand = next((i for (i, card) in enumerate(self.cur_hand) if card.deck_index == card_idx), None)
 
-        assert(idx_in_hand is not None)
+        assert (idx_in_hand is not None)
 
         for i in range(idx_in_hand, self.instance.hand_size - 1):
             self.cur_hand[i] = self.cur_hand[i + 1]
@@ -315,3 +292,10 @@ class GameState():
             self.cur_hand[self.instance.hand_size - 1] = self.instance.deck[self.progress]
             self.progress += 1
 
+    # in HanabLiveInstances, this will be overridden with something that checks defaults
+    def _waste_clue(self) -> Action:
+        return Action(
+            ActionType.RankClue,
+            target=(self.turn + 1) % self.instance.num_players,  # clue next plyaer
+            value=self.hands[(self.turn + 1) % self.instance.num_players][0].rank  # clue index 0
+        )
