@@ -3,7 +3,8 @@ from typing import Tuple, Optional
 
 from database import conn
 from compress import decompress_deck, decompress_actions, compress_actions, link
-from hanabi import Action, HanabiInstance, GameState
+from hanabi import Action, GameState
+from hanab_live import HanabLiveInstance, HanabLiveGameState
 from sat import solve_sat
 from download_data import export_game
 
@@ -25,7 +26,7 @@ def check_game(game_id: int) -> Tuple[int, GameState]:
         deck = decompress_deck(compressed_deck)
         actions = decompress_actions(compressed_actions)
 
-        instance = HanabiInstance(deck, num_players, variant_id=variant_id)
+        instance = HanabLiveInstance(deck, num_players, variant_id=variant_id)
 
         if instance.max_score == score:
             # instance has been won, nothing to compute here
@@ -36,12 +37,12 @@ def check_game(game_id: int) -> Tuple[int, GameState]:
         unsolvable_turn = len(actions)
 
         # first, check if the instance itself is feasible:
-        game = GameState(instance)
+        game = HanabLiveGameState(instance)
         solvable, solution = solve_sat(game)
         if not solvable:
             return 0, solution
 
-        while (unsolvable_turn - solvable_turn > 1):
+        while unsolvable_turn - solvable_turn > 1:
             try_turn = (unsolvable_turn + solvable_turn) // 2
             try_game = copy.deepcopy(game)
             assert(len(try_game.actions) == solvable_turn)
@@ -58,8 +59,9 @@ def check_game(game_id: int) -> Tuple[int, GameState]:
         assert(unsolvable_turn - 1 == solvable_turn)
         return unsolvable_turn, solution
 
+
 if __name__ == "__main__":
-    game_id = 963339
+    game_id = 921269
     export_game(game_id)
     print("checking game {}".format(game_id))
     turn, sol = check_game(game_id)
