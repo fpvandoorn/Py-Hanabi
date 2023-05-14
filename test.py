@@ -1,4 +1,6 @@
 import json
+
+import alive_progress
 import requests
 
 from variants import Variant
@@ -7,7 +9,7 @@ from site_api import *
 from download_data import download_games, detailed_export_game
 from check_game import check_game
 from compress import link
-from database.database import conn
+from database.database import conn, cur
 
 from database.init_database import init_database_tables, populate_static_tables
 
@@ -23,12 +25,12 @@ def test_variant():
 
 
 def check_missing_ids():
-#    start = 357849
-#    end = 358154
+    #    start = 357849
+    #    end = 358154
     start = 358393
     end = 358687
-#    broken_ids = [357913, 357914, 357915] # two of these are no variant
-#    not_supported_ids = [357925, 357957, 358081]
+    #    broken_ids = [357913, 357914, 357915] # two of these are no variant
+    #    not_supported_ids = [357925, 357957, 358081]
     broken_ids = [358627, 358630, 358632]
     not_supported_ids = [
     ]
@@ -40,16 +42,18 @@ def check_missing_ids():
         conn.commit()
 
 
-if __name__ == "__main__":
-    var_id = 964490
-    check_missing_ids()
-    exit(0)
+def export_all_seeds():
+    cur.execute(
+        "SELECT id FROM variants ORDER BY ID"
+    )
+    var_ids = cur.fetchall()
+    for var in var_ids:
+        download_games(*var)
 
-#    detailed_export_game(var_id)
-#    turn, state = check_game(var_id)
-#    if turn != 0:
-#        print("https://hanab.live/replay/{}".format(var_id))
-#        print(turn, link(state))
+
+if __name__ == "__main__":
+    var_id = 964532
+#    export_all_seeds()
 
 #    init_database_tables()
 #    populate_static_tables()
