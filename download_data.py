@@ -30,7 +30,7 @@ def detailed_export_game(game_id: int, score: Optional[int] = None, var_id: Opti
     assert_msg = "Invalid response format from hanab.live while exporting game id {}".format(game_id)
 
     game_json = get("export/{}".format(game_id))
-    assert game_json.get('id') == game_id, "Invalid response format from hanab.live"
+    assert game_json.get('id') == game_id, assert_msg
 
     players = game_json.get('players', [])
     num_players = len(players)
