@@ -22,7 +22,10 @@ def check_game(game_id: int) -> Tuple[int, GameState]:
                     "WHERE games.id = (%s)",
                     (game_id,)
                     )
-        (num_players, compressed_deck, compressed_actions, score, variant_id) = cur.fetchone()
+        res = cur.fetchone()
+        if res is None:
+            raise ValueError("No game associated with id {} in database.".format(game_id))
+        (num_players, compressed_deck, compressed_actions, score, variant_id) = res
         deck = decompress_deck(compressed_deck)
         actions = decompress_actions(compressed_actions)
 
