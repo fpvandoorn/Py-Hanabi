@@ -9,6 +9,8 @@ from compress import compress_deck, compress_actions, DeckCard, Action, InvalidF
 from variants import variant_id, variant_name
 from hanab_live import HanabLiveInstance, HanabLiveGameState
 
+from log_setup import logger
+
 
 #
 def detailed_export_game(game_id: int, score: Optional[int] = None, var_id: Optional[int] = None,
@@ -25,6 +27,8 @@ def detailed_export_game(game_id: int, score: Optional[int] = None, var_id: Opti
         If this is not the case, call will raise a DB insertion error
     """
 
+    assert_msg = "Invalid response format from hanab.live while exporting game id {}".format(game_id)
+
     game_json = get("export/{}".format(game_id))
     assert game_json.get('id') == game_id, "Invalid response format from hanab.live"
 
@@ -40,10 +44,13 @@ def detailed_export_game(game_id: int, score: Optional[int] = None, var_id: Opti
     actions = [Action.from_json(action) for action in game_json.get('actions', [])]
     deck = [DeckCard.from_json(card) for card in game_json.get('deck', None)]
 
-    assert (players != [])
-    assert (seed is not None)
+    assert players != [], assert_msg
+    assert seed is not None, assert_msg
 
     if score is None:
+        if deck_plays or one_less_card or one_extra_card or all_or_nothing:
+            # TODO: need to incorporate extra options here regarding hand size etc
+            raise RuntimeError('Not implemented.')
         # need to play through the game once to find out its score
         game = HanabLiveGameState(HanabLiveInstance(deck, num_players, var_id))
         for action in actions:
@@ -119,7 +126,7 @@ def download_games(var_id):
         raise ValueError("{} is not a known variant_id.".format(var_id))
 
     url = "variants/{}".format(var_id)
-    r = api(url)
+    r = api(url, refresh=True)
     if not r:
         raise RuntimeError("Failed to download request from hanab.live")
 
@@ -133,6 +140,7 @@ def download_games(var_id):
         (var_id, var_id)
     )
     num_already_downloaded_games = cur.fetchone()[0]
+    assert num_already_downloaded_games <= num_entries, "Database inconsistent, too many games present."
     next_page = num_already_downloaded_games // page_size
     last_page = (num_entries - 1) // page_size
 
@@ -148,15 +156,16 @@ def download_games(var_id):
 
     with alive_progress.alive_bar(
             total=num_entries - num_already_downloaded_games,
-            title='Downloading games for variant id {} [{}]'.format(var_id, name)
+            title='Downloading games for variant id {} [{}]'.format(var_id, name),
+            enrich_print=False
     ) as bar:
         for page in range(next_page, last_page + 1):
-            r = api(url + "?col[0]=0&page={}".format(page))
+            r = api(url + "?col[0]=0&page={}".format(page), refresh=page == last_page)
             rows = r.get('rows', [])
+            if page == next_page:
+                rows = rows[num_already_downloaded_games % 100:]
             if not (page == last_page or len(rows) == page_size):
-                print('WARN: received unexpected row count ({}) on page {}'.format(len(rows), page))
-        #        assert page == last_page or len(rows) == page_size, \
-        #            "Received unexpected row count ({}) when querying page {}".format(len(rows), page)
+                logger.warn('WARN: received unexpected row count ({}) on page {}'.format(len(rows), page))
             for row in rows:
                 process_game_row(row, var_id)
                 bar()
@@ -167,3 +176,4 @@ def download_games(var_id):
                 (var_id, r['rows'][-1]['id'])
             )
             conn.commit()
+
