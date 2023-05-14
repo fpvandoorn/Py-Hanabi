@@ -10,10 +10,19 @@ class HanabLiveInstance(hanabi.HanabiInstance):
             self,
             deck: List[hanabi.DeckCard],
             num_players: int,
-            variant_id: int
+            variant_id: int,
+            one_extra_card: bool = False,
+            one_less_card: bool = False,
+            *args, **kwargs
     ):
-        assert(2 <= num_players <= 6)
-        super().__init__(deck, num_players)
+        assert 2 <= num_players <= 6
+        hand_size = constants.HAND_SIZES[num_players]
+        if one_less_card:
+            hand_size -= 1
+        if one_extra_card:
+            hand_size += 1
+
+        super().__init__(deck, num_players, hand_size=hand_size, *args, **kwargs)
         self.variant_id = variant_id
         self.variant = Variant.from_db(self.variant_id)
 

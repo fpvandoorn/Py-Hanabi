@@ -80,7 +80,7 @@ class Action:
         return self.type == other.type and self.target == other.target and self.value == other.value
 
 
-class HanabiInstance():
+class HanabiInstance:
     def __init__(
             self,
             deck: List[DeckCard],
@@ -91,6 +91,8 @@ class HanabiInstance():
             num_strikes: Optional[int] = None,  # number of strikes that leads to game loss
             clue_starved: bool = False,  # if true, discarding and playing fives only gives back half a clue
             fives_give_clue: bool = True,  # if false, then playing a five will not change the clue count
+            deck_plays: bool = False,
+            all_or_nothing: bool = False
     ):
         # defining properties
         self.deck = deck
@@ -99,6 +101,8 @@ class HanabiInstance():
         self.num_strikes = num_strikes or constants.NUM_STRIKES
         self.clue_starved = clue_starved
         self.fives_give_clue = fives_give_clue
+        self.deck_plays = deck_plays,
+        self.all_or_nothing = all_or_nothing
 
         # normalize deck indices
         for (idx, card) in enumerate(self.deck):
@@ -138,7 +142,7 @@ class HanabiInstance():
         return 0.5 if self.clue_starved else 1
 
 
-class GameState():
+class GameState:
     def __init__(self, instance: HanabiInstance):
         # will not be modified
         self.instance = instance
@@ -178,7 +182,7 @@ class GameState():
             self.strikes += 1
             self.trash.append(self.instance.deck[card_idx])
         self.actions.append(Action(ActionType.Play, target=card_idx))
-        self._replace(card_idx)
+        self._replace(card_idx, allow_not_present=self.instance.deck_plays and (card_idx == self.deck_size - 1))
         self._make_turn()
         if all(s == 5 for s in self.stacks) or self.strikes >= self.instance.num_strikes:
             self.over = True
@@ -281,10 +285,14 @@ class GameState():
                 self.over = True
 
     # replaces the specified card (has to be in current player's hand) with the next card of the deck (if nonempty)
-    def _replace(self, card_idx):
-        idx_in_hand = next((i for (i, card) in enumerate(self.cur_hand) if card.deck_index == card_idx), None)
-
-        assert (idx_in_hand is not None)
+    def _replace(self, card_idx, allow_not_present: bool = False):
+        try:
+            idx_in_hand = next((i for (i, card) in enumerate(self.cur_hand) if card.deck_index == card_idx), None)
+        except StopIteration:
+            if not allow_not_present:
+                raise
+            self.progress += 1
+            return
 
         for i in range(idx_in_hand, self.instance.hand_size - 1):
             self.cur_hand[i] = self.cur_hand[i + 1]
