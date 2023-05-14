@@ -53,7 +53,8 @@ def export_all_seeds():
 
 if __name__ == "__main__":
     var_id = 964532
-#    export_all_seeds()
+    export_all_seeds()
+    exit(0)
 
 #    init_database_tables()
 #    populate_static_tables()

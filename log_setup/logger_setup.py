@@ -1,8 +1,8 @@
-import logging
+import logging, verboselogs
 
 
 def make_logger():
-    logger = logging.getLogger("hanab-suite")
+    logger = verboselogs.VerboseLogger("hanab-suite")
 
     logger.setLevel(logging.DEBUG)
 

@@ -26,6 +26,7 @@ def detailed_export_game(game_id: int, score: Optional[int] = None, var_id: Opti
     :param seed_exists: If specified and true, assumes that the seed is already present in database.
         If this is not the case, call will raise a DB insertion error
     """
+    logger.debug("Importing game {}".format(game_id))
 
     assert_msg = "Invalid response format from hanab.live while exporting game id {}".format(game_id)
 
@@ -60,12 +61,12 @@ def detailed_export_game(game_id: int, score: Optional[int] = None, var_id: Opti
     try:
         compressed_deck = compress_deck(deck)
     except InvalidFormatError:
-        print("Failed to compress deck while exporting game {}: {}".format(game_id, deck))
+        logger.error("Failed to compress deck while exporting game {}: {}".format(game_id, deck))
         raise
     try:
         compressed_actions = compress_actions(actions)
     except InvalidFormatError:
-        print("Failed to compress actions while exporting game {}".format(game_id))
+        logger.error("Failed to compress actions while exporting game {}".format(game_id))
         raise
 
     if not seed_exists:
@@ -75,6 +76,7 @@ def detailed_export_game(game_id: int, score: Optional[int] = None, var_id: Opti
             "ON CONFLICT (seed) DO NOTHING",
             (seed, num_players, var_id, compressed_deck)
         )
+        logger.debug("New seed {} imported.".format(seed))
 
     cur.execute(
         "INSERT INTO games ("
@@ -93,6 +95,7 @@ def detailed_export_game(game_id: int, score: Optional[int] = None, var_id: Opti
             all_or_nothing, compressed_actions
         )
     )
+    logger.debug("Imported game {}".format(game_id))
 
 
 def process_game_row(game: Dict, var_id):
@@ -117,6 +120,7 @@ def process_game_row(game: Dict, var_id):
         cur.execute("ROLLBACK TO seed_insert")
         detailed_export_game(game_id, score, var_id)
     cur.execute("RELEASE seed_insert")
+    logger.debug("Imported game {}".format(game_id))
 
 
 def download_games(var_id):
@@ -145,10 +149,9 @@ def download_games(var_id):
     last_page = (num_entries - 1) // page_size
 
     if num_already_downloaded_games == num_entries:
-        print("Already downloaded all games for variant {} [{}]".format(var_id, name))
+        logger.info("Already downloaded all games ({} many) for variant {} [{}]".format(num_entries, var_id, name))
         return
-
-    print(
+    logger.info(
         "Downloading remaining {} (total {}) entries for variant {} [{}]".format(
             num_entries - num_already_downloaded_games, num_entries, var_id, name
         )

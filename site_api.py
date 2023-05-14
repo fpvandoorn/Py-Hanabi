@@ -11,7 +11,7 @@ session = requests_cache.CachedSession('hanab.live')
 def get(url, refresh=False):
     #    print("sending request for " + url)
     query = "https://hanab.live/" + url
-    logger.debug("GET {}".format(query))
+    logger.debug("GET {} (force_refresh={})".format(query, refresh))
     response = session.get(query, force_refresh=refresh)
     if not response:
         logger.error("Failed to get request {} from hanab.live".format(query))

@@ -1,17 +1,22 @@
 import json
 import requests
 from pathlib import Path
+from log_setup import logger
 
 from .database import cur, conn
 
 
 def init_database_tables():
     this = Path(__file__)
+    logger.verbose("Initialising games and seeds tables...")
     with open(this.parent / "games_seeds_schema.sql") as f:
         cur.execute(f.read())
+    logger.verbose("Successfully initialised games and seeds tables.")
 
+    logger.verbose("Initialising variants, colors and suits tables...")
     with open(this.parent / "variant_suits_schema.sql", "r") as f:
         cur.execute(f.read())
+    logger.verbose("Successfully initialised variants, colors and suits tables...")
 
     conn.commit()
 
@@ -21,6 +26,7 @@ def populate_static_tables():
 
 
 def _populate_static_tables(suits, variants):
+    logger.verbose("Populating static tables with hanab.live format information")
     suits_to_reverse = set()
     for var in variants:
         for suit in var['suits']:
@@ -34,6 +40,8 @@ def _populate_static_tables(suits, variants):
 
 
 def _populate_suits(suits, suits_to_reverse):
+    logger.verbose("Populating suits and colors tables...")
+    logger.debug("Needing to reverse the following suits: {}".format(suits_to_reverse))
     for suit in suits:
         name: str = suit['name']
         display_name: str = suit.get('displayName', name)
@@ -65,6 +73,7 @@ def _populate_suits(suits, suits_to_reverse):
                 "(%s, %s, %s, %s, %s, %s, %s, %s)",
                 (suit_name, display_name, abbreviation, rank_clues, color_clues, dark, rev, prism)
             )
+            logger.debug("New suit {} imported.".format(name))
             cur.execute(
                 "SELECT id FROM suits WHERE name = %s",
                 (suit_name,)
@@ -78,6 +87,7 @@ def _populate_suits(suits, suits_to_reverse):
                         "ON CONFLICT (name) DO NOTHING",
                         (color,)
                     )
+                    logger.debug("New clue color {} imported.".format(color))
                 cur.execute(
                     "SELECT id FROM colors WHERE name = %s",
                     (color,)
@@ -92,6 +102,7 @@ def _populate_suits(suits, suits_to_reverse):
 
 
 def _populate_variants(variants):
+    logger.verbose("Populating variants table...")
     for var in variants:
         var_id = var['id']
         name = var['name']
@@ -145,7 +156,11 @@ def _populate_variants(variants):
             )
             suit_id = cur.fetchone()
             if suit_id is None:
-                print(suit)
+                err_msg = "Invalid suit name {} encountered while importing variant {} [{}]." \
+                          "Is the suits DB not populated?"\
+                    .format(suit, var_id, name)
+                logger.error(err_msg)
+                raise RuntimeError(err_msg)
 
             cur.execute(
                 "INSERT INTO variant_suits (variant_id, suit_id, index) VALUES (%s, %s, %s)",
@@ -154,6 +169,7 @@ def _populate_variants(variants):
 
 
 def _download_json_files():
+    logger.verbose("Downloading JSON files for suits and variants from github...")
     base_url = "https://raw.githubusercontent.com/Hanabi-Live/hanabi-live/main/packages/data/src/json"
     data = {}
     for name in ["suits", "variants"]:
@@ -161,8 +177,8 @@ def _download_json_files():
         url = base_url + "/" + filename
         response = requests.get(url)
         if not response.status_code == 200:
-            raise RuntimeError(
-                "Could not download initialization file {} from github (tried url {})".format(filename, url)
-            )
+            err_msg = "Could not download initialization file {} from github (tried url {})".format(filename, url)
+            logger.error(err_msg)
+            raise RuntimeError(err_msg)
         data[name] = json.loads(response.text)
     return data['suits'], data['variants']
