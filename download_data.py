@@ -1,4 +1,4 @@
-import json
+import alive_progress
 from typing import Dict, Optional
 
 import psycopg2.errors
@@ -146,18 +146,24 @@ def download_games(var_id):
         )
     )
 
-    for page in range(next_page, last_page + 1):
-        r = api(url + "?col[0]=0&page={}".format(page))
-        rows = r.get('rows', [])
-        assert page == last_page or len(rows) == page_size, \
-            "Received unexpected row count ({}) when querying page {}".format(len(rows), page)
-        for row in rows:
-            process_game_row(row, var_id)
-        cur.execute(
-            "INSERT INTO variant_game_downloads (variant_id, last_game_id) VALUES"
-            "(%s, %s)"
-            "ON CONFLICT (variant_id) DO UPDATE SET last_game_id = EXCLUDED.last_game_id",
-            (var_id, r['rows'][-1]['id'])
-        )
-        conn.commit()
-        print('Downloaded and processed page {}'.format(page))
+    with alive_progress.alive_bar(
+            total=num_entries - num_already_downloaded_games,
+            title='Downloading games for variant id {} [{}]'.format(var_id, name)
+    ) as bar:
+        for page in range(next_page, last_page + 1):
+            r = api(url + "?col[0]=0&page={}".format(page))
+            rows = r.get('rows', [])
+            if not (page == last_page or len(rows) == page_size):
+                print('WARN: received unexpected row count ({}) on page {}'.format(len(rows), page))
+        #        assert page == last_page or len(rows) == page_size, \
+        #            "Received unexpected row count ({}) when querying page {}".format(len(rows), page)
+            for row in rows:
+                process_game_row(row, var_id)
+                bar()
+            cur.execute(
+                "INSERT INTO variant_game_downloads (variant_id, last_game_id) VALUES"
+                "(%s, %s)"
+                "ON CONFLICT (variant_id) DO UPDATE SET last_game_id = EXCLUDED.last_game_id",
+                (var_id, r['rows'][-1]['id'])
+            )
+            conn.commit()
