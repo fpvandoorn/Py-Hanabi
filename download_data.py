@@ -1,6 +1,8 @@
 import json
 from typing import Dict, Optional
 
+import psycopg2.errors
+
 from site_api import get, api, replay
 from database.database import Game, store, load, commit, conn, cur
 from compress import compress_deck, compress_actions, DeckCard, Action, InvalidFormatError
@@ -9,7 +11,8 @@ from hanab_live import HanabLiveInstance, HanabLiveGameState
 
 
 #
-def detailed_export_game(game_id: int, score: Optional[int] = None, seed_exists: bool = False) -> None:
+def detailed_export_game(game_id: int, score: Optional[int] = None, var_id: Optional[int] = None,
+                         seed_exists: bool = False) -> None:
     """
     Downloads full details of game, inserts seed and game into DB
     If seed is already present, it is left as is
@@ -17,6 +20,7 @@ def detailed_export_game(game_id: int, score: Optional[int] = None, seed_exists:
 
     :param game_id:
     :param score: If given, this will be inserted as score of the game. If not given, score is calculated
+    :param var_id If given, this will be inserted as variant id of the game. If not given, this is looked up
     :param seed_exists: If specified and true, assumes that the seed is already present in database.
         If this is not the case, call will raise a DB insertion error
     """
@@ -28,7 +32,7 @@ def detailed_export_game(game_id: int, score: Optional[int] = None, seed_exists:
     num_players = len(players)
     seed = game_json.get('seed', None)
     options = game_json.get('options', {})
-    var_id = variant_id(options.get('variant', 'No Variant'))
+    var_id = var_id or variant_id(options.get('variant', 'No Variant'))
     deck_plays = options.get('deckPlays', False)
     one_extra_card = options.get('oneExtraCard', False)
     one_less_card = options.get('oneLessCard', False)
@@ -93,9 +97,8 @@ def process_game_row(game: Dict, var_id):
     if any(v is None for v in [game_id, seed, num_players, score]):
         raise ValueError("Unknown response format on hanab.live")
 
-    cur.execute("SELECT seed FROM seeds WHERE seed = %s", (seed,))
-    seed_exists = cur.fetchone()
-    if seed_exists is not None:
+    cur.execute("SAVEPOINT seed_insert")
+    try:
         cur.execute(
             "INSERT INTO games (id, seed, num_players, score, variant_id)"
             "VALUES"
@@ -103,8 +106,10 @@ def process_game_row(game: Dict, var_id):
             "ON CONFLICT (id) DO NOTHING",
             (game_id, seed, num_players, score, var_id)
         )
-    else:
-        detailed_export_game(game_id, score)
+    except psycopg2.errors.ForeignKeyViolation:
+        cur.execute("ROLLBACK TO seed_insert")
+        detailed_export_game(game_id, score, var_id)
+    cur.execute("RELEASE seed_insert")
 
 
 def download_games(var_id):
