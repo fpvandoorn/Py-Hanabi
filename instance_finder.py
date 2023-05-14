@@ -1,18 +1,15 @@
-import json
-from site_api import get, api, replay
 from sat import solve_sat
-from database import Game, store, load, commit, conn
+from database import conn
 from download_data import export_game
-from variants import num_suits, VARIANTS, variant_name
+from variants import VARIANTS, variant_name
 from alive_progress import alive_bar
 from compress import decompress_deck, link
 import concurrent.futures
 from threading import Lock
-from time import sleep, perf_counter
+from time import perf_counter
 from greedy_solver import GameState, GreedyStrategy
-from logger_setup import logger
-from deck_analyzer import analyze, InfeasibilityReason, InfeasibilityType
-
+from log_setup.logger_setup import logger
+from deck_analyzer import analyze, InfeasibilityReason
 
 MAX_PROCESSES=4
 
