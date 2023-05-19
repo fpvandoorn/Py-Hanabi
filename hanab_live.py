@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 import hanabi
 import constants
@@ -25,6 +25,19 @@ class HanabLiveInstance(hanabi.HanabiInstance):
         super().__init__(deck, num_players, hand_size=hand_size, *args, **kwargs)
         self.variant_id = variant_id
         self.variant = Variant.from_db(self.variant_id)
+
+    @staticmethod
+    def select_standard_variant_id(instance: hanabi.HanabiInstance):
+        err_msg = "Hanabi instance not supported by hanab.live, cannot convert to HanabLiveInstance: "
+        assert 3 <= instance.num_suits <= 6, \
+            err_msg + "Illegal number of suits ({}) found, must be in range [3,6]".format(instance.num_suits)
+        assert 0 <= instance.num_dark_suits <= 2, \
+            err_msg + "Illegal number of dark suits ({}) found, must be in range [0,2]".format(instance.num_dark_suits)
+        assert 4 <= instance.num_suits - instance.num_dark_suits, \
+            err_msg + "Illegal ratio of dark suits to suits, can have at most {} dark suits with {} total suits".format(
+                max(instance.num_suits - 4, 0), instance.num_suits
+            )
+        return constants.VARIANT_IDS_STANDARD_DISTRIBUTIONS[instance.num_suits][instance.num_dark_suits]
 
 
 class HanabLiveGameState(hanabi.GameState):

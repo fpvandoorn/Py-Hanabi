@@ -5,10 +5,11 @@ import more_itertools
 
 from enum import Enum
 from termcolor import colored
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from variants import variant_id, variant_name
 from hanabi import DeckCard, ActionType, Action, GameState, HanabiInstance
+from hanab_live import HanabLiveGameState, HanabLiveInstance
 
 
 # use same BASE62 as on hanab.live to encode decks
@@ -164,14 +165,18 @@ def decompress_deck(deck_str: str) -> List[DeckCard]:
 # which can be used in json replay links
 # The GameState object has to be standard / fitting hanab.live variants,
 # otherwise compression is not possible
-def compress_game_state(state: GameState) -> str:
-#    if not state.instance.is_standard():
-#        raise ValueError("Cannot compress non-standard hanabi instance")
+def compress_game_state(state: Union[GameState, HanabLiveGameState]) -> str:
+    var_id = -1
+    if isinstance(state, GameState):
+        var_id = HanabLiveInstance.select_standard_variant_id(state.instance)
+    else:
+        assert isinstance(state, HanabLiveGameState)
+        var_id = state.instance.variant_id
     out = "{}{},{},{}".format(
             state.instance.num_players,
             compress_deck(state.instance.deck),
             compress_actions(state.actions),
-            state.instance.variant_id             # Note that a sane default is chosen if construction did not provide one
+            var_id
             )
     with_dashes = ''.join(more_itertools.intersperse("-", out, 20))
     return with_dashes
