@@ -2,9 +2,11 @@
 import collections
 import sys
 from enum import Enum
+from log_setup import logger
 from time import sleep
 
 from hanabi import DeckCard, Action, ActionType, GameState, HanabiInstance
+from hanab_live import HanabLiveInstance, HanabLiveGameState
 from compress import link, decompress_deck
 from database.database import conn
 
@@ -33,6 +35,7 @@ class CardState():
             case CardType.Dispensable:
                 return "Dispensable ({}) with weight {}".format(self.card, self.weight)
 
+
 # TODO
 def card_type(game_state, card):
     played = game_state.stacks[card.suitIndex]
@@ -55,8 +58,8 @@ class GreedyStrategy():
             self.earliest_draw_times.append([])
             for r in range(1, 6):
                 self.earliest_draw_times[s].append(max(
-                        game_state.deck.index(DeckCard(s,r)) - game_state.hand_size * game_state.num_players + 1,
-                        0 if r == 1 else self.earliest_draw_times[s][r - 2]
+                    game_state.deck.index(DeckCard(s, r)) - game_state.hand_size * game_state.num_players + 1,
+                    0 if r == 1 else self.earliest_draw_times[s][r - 2]
                 ))
 
         # Currently, we do not add the time the 5 gets drawn to this, since this is rather a measurument on how
@@ -64,7 +67,8 @@ class GreedyStrategy():
         self.suit_badness = [sum(self.earliest_draw_times[s][:-1]) for s in range(0, game_state.num_suits)]
 
     def make_move(self):
-        hand_states = [[CardState(card_type(self.game_state, card), card, None) for card in self.game_state.hands[p]] for p in range(self.game_state.num_players)]
+        hand_states = [[CardState(card_type(self.game_state, card), card, None) for card in self.game_state.hands[p]]
+                       for p in range(self.game_state.num_players)]
 
         # find dupes in players hands, marke one card crit and the other one trash
         p = False
@@ -86,7 +90,7 @@ class GreedyStrategy():
             crits_val = sum(map(lambda state: state.card.rank, crits))
             if any(state.card_type == CardType.Playable for state in states):
                 return crits_val
-        
+
         def player_distance(f, t):
             return ((t - f - 1) % self.game_state.num_players) + 1
 
@@ -95,7 +99,8 @@ class GreedyStrategy():
                 if state.card_type == CardType.Playable:
                     copy_holders = set(self.game_state.holding_players(state.card))
                     copy_holders.remove(player)
-                    connecting_holders = set(self.game_state.holding_players(DeckCard(state.card.suitIndex, state.card.rank + 1)))
+                    connecting_holders = set(
+                        self.game_state.holding_players(DeckCard(state.card.suitIndex, state.card.rank + 1)))
 
                     if len(copy_holders) == 0:
                         # card is unique, imortancy is based lexicographically on whether somebody has the conn. card and the rank
@@ -123,14 +128,12 @@ class GreedyStrategy():
                         nextCopy = self.game_state.deck[self.game_state.progress:].index(card)
                     except:
                         nextCopy = 1
-#                    state.weight = self.suit_badness[state.card.suitIndex] * nextCopy + 2 * (5 - state.card.rank)
+                    #                    state.weight = self.suit_badness[state.card.suitIndex] * nextCopy + 2 * (5 - state.card.rank)
                     state.weight = nextCopy + 2 * (5 - state.card.rank)
-
 
         cur_hand = hand_states[self.game_state.turn]
         plays = [cstate for cstate in cur_hand if cstate.card_type == CardType.Playable]
         trash = next((cstate for cstate in cur_hand if cstate.card_type == CardType.Trash), None)
-
 
         # actual decision on what to do
 
@@ -145,12 +148,13 @@ class GreedyStrategy():
             dispensable = [cstate for cstate in cur_hand if cstate.card_type == CardType.Dispensable]
             if len(dispensable) == 0:
                 self.game_state.in_lost_state = True
-#                raise ValueError("Lost critical card")
+            #                raise ValueError("Lost critical card")
             else:
                 discard = min(dispensable, key=lambda s: s.weight)
                 self.game_state.discard(discard.card.deck_index)
         else:
             self.game_state.clue()
+
 
 def test():
     # seed p4v0s148
@@ -161,9 +165,9 @@ def test():
     strat = GreedyStrategy(gs)
     while not gs.is_over():
         strat.make_move()
-#    print(strat.suit_badness)
-#    print(COLORS)
-#    strat.make_move()
+    #    print(strat.suit_badness)
+    #    print(COLORS)
+    #    strat.make_move()
     print(gs.actions)
     print(link(gs.to_json()))
 
@@ -173,15 +177,18 @@ def test():
 # crits = open("crits_lost.txt", "a")
 
 
-def run_deck(seed, num_players, deck_str):
+def run_deck(seed, num_players, deck_str, variant_id):
     deck = decompress_deck(deck_str)
-    instance = HanabiInstance(deck, num_players)
-    gs = GameState(instance)
+    instance = HanabLiveInstance(deck, num_players, variant_id)
+    gs = HanabLiveGameState(instance)
     strat = GreedyStrategy(gs)
     while not gs.is_over():
         strat.make_move()
     if not gs.score == 25:
-        losses.write("{}-player seed {:10} {}:\n{}\n".format(num_players, seed, str(deck), link(gs)))
+        logger.verbose(
+            "Greedy strategy lost {}-player seed {:10} {}:\n{}"
+            .format(num_players, seed, str(deck), link(gs))
+        )
         return False
     return True
 
@@ -190,16 +197,19 @@ def run_samples(num_players, sample_size):
     won = 0
     lost = 0
     cur = conn.cursor()
-    cur.execute("SELECT seed, num_players, deck FROM seeds WHERE variant_id = 0 AND num_players = (%s) order by seed desc limit (%s)", (num_players, sample_size))
+    cur.execute(
+        "SELECT seed, num_players, deck, variant_id FROM seeds WHERE variant_id = 0 AND num_players = (%s) order by seed desc limit (%s)",
+        (num_players, sample_size))
     for r in cur:
         succ = run_deck(*r)
         if succ:
             won += 1
         else:
             lost += 1
-        print("won: {:4}, lost: {:4}".format(won, lost), end = "\r")
+        print("won: {:4}, lost: {:4}".format(won, lost), end="\r")
     print()
     print("Total wins: {}%".format(round(100 * won / (lost + won), 2)))
+
 
 if __name__ == "__main__":
     for p in range(2, 6):
