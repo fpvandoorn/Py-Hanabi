@@ -155,62 +155,38 @@ class GreedyStrategy():
             self.game_state.clue()
 
 
-def test():
-    # seed p4v0s148
-    deck = decompress_deck("15wpspaodknlftabkpixbxiudqvrumhsgeakqucvgcrfmfhynwlj")
-    gs = GameState(5, deck)
-    print(gs.deck)
-
-    strat = GreedyStrategy(gs)
-    while not gs.is_over():
-        strat.make_move()
-    #    print(strat.suit_badness)
-    #    print(COLORS)
-    #    strat.make_move()
-    print(gs.actions)
-    print(link(gs.to_json()))
-
-
-# wins = open("won_seeds.txt", "a")
-# losses = open("lost_seeds.txt", "a")
-# crits = open("crits_lost.txt", "a")
-
-
-def run_deck(seed, num_players, deck_str, variant_id):
-    deck = decompress_deck(deck_str)
-    instance = HanabiInstance(deck, num_players, variant_id)
+def run_deck(instance: HanabiInstance) -> GameState:
     gs = GameState(instance)
     strat = GreedyStrategy(gs)
     while not gs.is_over():
         strat.make_move()
-    if not gs.score == 25:
-        logger.verbose(
-            "Greedy strategy lost {}-player seed {:10} {}:\n{}"
-            .format(num_players, seed, str(deck), link(gs))
-        )
-        return False
-    return True
+    return gs
 
 
 def run_samples(num_players, sample_size):
+    logger.info("Running {} test games on {} players using greedy strategy.".format(sample_size, num_players))
     won = 0
     lost = 0
     cur = conn.cursor()
     cur.execute(
-        "SELECT seed, num_players, deck, variant_id FROM seeds WHERE variant_id = 0 AND num_players = (%s) order by seed desc limit (%s)",
+        "SELECT seed, num_players, deck, variant_id "
+        "FROM seeds WHERE variant_id = 0 AND num_players = (%s)"
+        "ORDER BY seed DESC LIMIT (%s)",
         (num_players, sample_size))
     for r in cur:
-        succ = run_deck(*r)
-        if succ:
-            won += 1
-        else:
+        seed, num_players, deck_str, var_id = r
+        deck = decompress_deck(deck_str)
+        instance = HanabiInstance(deck, num_players)
+        final_game_state = run_deck(instance)
+        if final_game_state.score != instance.max_score:
+            logger.verbose(
+                "Greedy strategy lost {}-player seed {:10} {}:\n{}"
+                .format(num_players, seed, str(deck), link(final_game_state))
+            )
             lost += 1
+        else:
+            won += 1
         print("won: {:4}, lost: {:4}".format(won, lost), end="\r")
-    print()
-    print("Total wins: {}%".format(round(100 * won / (lost + won), 2)))
-
-
-if __name__ == "__main__":
-    for p in range(2, 6):
-        print("Testing on {} players...".format(p))
-        run_samples(p, sys.argv[1])
+    logger.info("Won {} ({}%) and lost {} ({}%) from sample of {} test games using greedy strategy.".format(
+        won, round(100 * won / sample_size, 2), lost, round(100 * lost / sample_size, 2), sample_size
+    ))
