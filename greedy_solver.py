@@ -6,7 +6,6 @@ from log_setup import logger
 from time import sleep
 
 from hanabi import DeckCard, Action, ActionType, GameState, HanabiInstance
-from hanab_live import HanabLiveInstance, HanabLiveGameState
 from compress import link, decompress_deck
 from database.database import conn
 
@@ -179,8 +178,8 @@ def test():
 
 def run_deck(seed, num_players, deck_str, variant_id):
     deck = decompress_deck(deck_str)
-    instance = HanabLiveInstance(deck, num_players, variant_id)
-    gs = HanabLiveGameState(instance)
+    instance = HanabiInstance(deck, num_players, variant_id)
+    gs = GameState(instance)
     strat = GreedyStrategy(gs)
     while not gs.is_over():
         strat.make_move()
