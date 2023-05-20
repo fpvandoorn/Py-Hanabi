@@ -1,5 +1,6 @@
 import copy
-from pysmt.shortcuts import Symbol, Bool, Not, Implies, Iff, And, Or, AtMostOne, ExactlyOne, get_model, get_atoms, get_formula_size, get_unsat_core
+from pysmt.shortcuts import Symbol, Bool, Not, Implies, Iff, And, Or, AtMostOne, ExactlyOne, get_model, get_atoms, get_formula_size, get_unsat_core, Equals, GE, NotEquals, Int
+from pysmt.typing import INT
 from pysmt.rewritings import conjunctive_partition
 import json
 from typing import List, Optional, Tuple
@@ -19,25 +20,12 @@ class Literals():
     # default distribution among all suits is assumed
     def __init__(self, instance: HanabiInstance):
 
-        # clues[m][i] == "after move m we have at least i clues"
+        # clues[m][i] == "after move m we have i clues", in clue starved, this counts half clues
         self.clues = {
-                -1: { i: Bool(i < 9) for i in range(0, 10) }  # we have 8 clues after turn -1
+                -1: Int(16 if instance.clue_starved else 8)  # we have 8 clues after turn
                 , **{
-                        m: {
-                            0: Bool(True),                                                # always at least 0 clues
-                            **{ i: Symbol('m{}clues{}'.format(m, i)) for i in range(1, 9) },
-                            9: Bool(False)                                                # never 9 or more clues. This will implicitly forbid discarding at 8 clues later
-                           }
+                        m: Symbol('m{}clues'.format(m), INT)
                         for m in range(instance.max_winning_moves)
-                    }
-                }
-
-        # half_clue[m] == "after move we have (an additional) half a clue [relevant for ClueStarved variants]"
-        self.half_clue = {
-                -1: Bool(False)
-                , **{
-                    m: Symbol('m{}halfclue'.format(m))
-                    for m in range(instance.max_winning_moves)
                     }
                 }
 
@@ -152,8 +140,8 @@ def solve_sat(starting_state: GameState | HanabiInstance) -> Tuple[bool, Optiona
         # have to set additional variables
 
         # set initial clues
-        for i in range(0,10):
-            ls.clues[first_turn - 1][i] = Bool(i <= game_state.clues)
+        for i in range(0, 10):
+            ls.clues[first_turn - 1] = Int(game_state.clues)
 
         # set initial strikes
         for i in range(0, instance.num_strikes + 1):
@@ -162,7 +150,7 @@ def solve_sat(starting_state: GameState | HanabiInstance) -> Tuple[bool, Optiona
         # check if extraround has started (usually not)
         ls.extraround[first_turn - 1] = Bool(game_state.remaining_extra_turns < game_state.num_players)
         ls.dummyturn[first_turn -1] = Bool(False)
-        
+
         # set recent draws: important to model progress
         # we just pretend that the last card drawn was in fact drawn last turn,
         # regardless of when it was actually drawn
@@ -180,7 +168,7 @@ def solve_sat(starting_state: GameState | HanabiInstance) -> Tuple[bool, Optiona
                 ls.progress[first_turn - 1][s, r] = Bool(r <= game_state.stacks[s])
 
     ### Now, model all valid moves
-    
+
     valid_move = lambda m: And(
         # in dummy turns, nothing can be discarded
         Implies(ls.dummyturn[m], Not(ls.discard_any[m])),
@@ -202,18 +190,13 @@ def solve_sat(starting_state: GameState | HanabiInstance) -> Tuple[bool, Optiona
         Iff(ls.play5[m], And(ls.play[m], Or(ls.discard[m][i] for i in range(instance.deck_size) if instance.deck[i].rank == 5))),
 
         # definition of ls.incr_clues
-        Iff(ls.incr_clues[m], And(ls.discard_any[m], Not(ls.clues[m-1][8]), Implies(ls.play[m], ls.play5[m]))),
+        Iff(ls.incr_clues[m], And(ls.discard_any[m], NotEquals(ls.clues[m-1], Int(16 if instance.clue_starved else 8)), Implies(ls.play[m], ls.play5[m]))),
 
         # change of ls.clues
-        *[
-            Iff(ls.clues[m][i], Or(
-                ls.clues[m-1][i+1],
-                And(ls.clues[m-1][i], Or(ls.discard_any[m], ls.dummyturn[m])),
-                And(ls.clues[m-1][i-1], ls.incr_clues[m], ls.half_clue[m-1] if instance.clue_starved else Bool(True))
-                )
-            )
-          for i in range(1, 9)
-        ],
+        Implies(And(Not(ls.discard_any[m]), Not(ls.dummyturn[m])),
+                Equals(ls.clues[m], ls.clues[m-1] - (2 if instance.clue_starved else 1))),
+        Implies(ls.incr_clues[m], Equals(ls.clues[m], ls.clues[m-1] + 1)),
+        Implies(And(Or(ls.discard_any[m], ls.dummyturn[m]), Not(ls.incr_clues[m])), Equals(ls.clues[m], ls.clues[m-1])),
 
         Iff(ls.half_clue[m], Or(And(ls.half_clue[m-1], Not(ls.incr_clues[m])), And(Not(ls.half_clue[m-1])), ls.incr_clues[m]))
         if instance.clue_starved else Bool(True),
@@ -223,13 +206,13 @@ def solve_sat(starting_state: GameState | HanabiInstance) -> Tuple[bool, Optiona
         # It's easy to see that if there is any solution to the instance, then there is also one where we only strike at 8 clues
         # (or not at all) -> Just strike later if neccessary
         # So, we decrease the solution space with this formulation, but do not change whether it's empty or not
-        Iff(ls.strike[m], And(ls.discard_any[m], Not(ls.play[m]), ls.clues[m-1][8])),
+        Iff(ls.strike[m], And(ls.discard_any[m], Not(ls.play[m]), Equals(ls.clues[m-1], Int(16 if instance.clue_starved else 8)))),
 
         # change of strikes
         *[Iff(ls.strikes[m][i], Or(ls.strikes[m-1][i], And(ls.strikes[m-1][i-1], ls.strike[m]))) for i in range(1, instance.num_strikes + 1)],
 
         # less than 0 clues not allowed
-        Implies(Not(ls.discard_any[m]), Or(ls.clues[m-1][1], ls.dummyturn[m])),
+        Implies(Not(ls.discard_any[m]), Or(GE(ls.clues[m-1], Int(1)), ls.dummyturn[m])),
 
         # we can only draw card i if the last ls.drawn card was i-1
         *[Implies(ls.draw[m][i], Or(And(ls.draw[m0][i-1], *[Not(ls.draw_any[m1]) for m1 in range(m0+1, m)]) for m0 in range(max(first_turn - 1, m-9), m))) for i in range(game_state.progress, instance.deck_size)],
@@ -325,7 +308,7 @@ def log_model(model, cur_game_state, ls: Literals):
         logger.debug('[print_model] Note: Omitting first {} turns, since they were fixed already.'.format(first_turn))
     for m in range(first_turn, cur_game_state.instance.max_winning_moves):
         logger.debug('=== move {} ==='.format(m))
-        logger.debug('clues: ' + ''.join(str(i) for i in range(1, 9) if model.get_py_value(ls.clues[m][i])))
+        logger.debug('clues: {}'.format(model.get_py_value(ls.clues[m])))
         logger.debug('strikes: ' + ''.join(str(i) for i in range(1, 3) if model.get_py_value(ls.strikes[m][i])))
         logger.debug('draw: ' + ', '.join('{}: {}'.format(i, deck[i]) for i in range(cur_game_state.progress, cur_game_state.instance.deck_size) if model.get_py_value(ls.draw[m][i])))
         logger.debug('discard: ' + ', '.join('{}: {}'.format(i, deck[i]) for i in range(cur_game_state.instance.deck_size) if model.get_py_value(ls.discard[m][i])))
