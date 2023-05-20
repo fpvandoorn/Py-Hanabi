@@ -167,11 +167,11 @@ def decompress_deck(deck_str: str) -> List[DeckCard]:
 # otherwise compression is not possible
 def compress_game_state(state: Union[GameState, HanabLiveGameState]) -> str:
     var_id = -1
-    if isinstance(state, GameState):
-        var_id = HanabLiveInstance.select_standard_variant_id(state.instance)
-    else:
-        assert isinstance(state, HanabLiveGameState)
+    if isinstance(state, HanabLiveGameState):
         var_id = state.instance.variant_id
+    else:
+        assert isinstance(state, GameState)
+        var_id = HanabLiveInstance.select_standard_variant_id(state.instance)
     out = "{}{},{},{}".format(
             state.instance.num_players,
             compress_deck(state.instance.deck),
@@ -216,7 +216,7 @@ def decompress_game_state(game_str: str) -> GameState:
     except ValueError:
         raise ValueError("Expected variant id, found: {}".format(variant_id))
 
-    instance = HanabiInstance(deck, num_players, variant_id=variant_id)
+    instance = HanabiInstance(deck, num_players)
     game = GameState(instance)
     
     # TODO: game is not in consistent state
@@ -226,7 +226,7 @@ def decompress_game_state(game_str: str) -> GameState:
 
 def link(game_state: GameState) -> str:
     compressed = compress_game_state(game_state)
-    return "https://hanab.live/replay-json/{}".format(compressed)
+    return "https://hanab.live/shared-replay-json/{}".format(compressed)
 
 
 # add link method to GameState class
