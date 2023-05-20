@@ -1,15 +1,12 @@
 import copy
 from typing import Tuple, Optional
 
-import verboselogs
-
 from database.database import conn
-from compress import decompress_deck, decompress_actions, compress_actions, link
+from compress import decompress_deck, decompress_actions, link
 from hanabi import Action, GameState
 from hanab_live import HanabLiveInstance, HanabLiveGameState
 from sat import solve_sat
-from log_setup import logger, logger_manager
-from download_data import detailed_export_game
+from log_setup import logger
 
 
 # returns minimal number T of turns (from game) after which instance was infeasible
