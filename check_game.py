@@ -51,7 +51,7 @@ def check_game(game_id: int) -> Tuple[int, GameState]:
         game = HanabLiveGameState(instance)
         solvable, solution = solve_sat(game)
         if not solvable:
-            logger.debug("Returning: Instance {} is not feasible")
+            logger.debug("Returning: Instance {} is not feasible.")
             return 0, solution
         logger.verbose("Instance {} is feasible after 0 turns: {}".format(game_id, link(solution)))
 
@@ -61,16 +61,17 @@ def check_game(game_id: int) -> Tuple[int, GameState]:
             assert(len(try_game.actions) == solvable_turn)
             for a in range(solvable_turn, try_turn):
                 try_game.make_action(actions[a])
-            logger.debug("Checking if instance {} is feasible after {} turs".format(game_id, try_turn))
+            logger.debug("Checking if instance {} is feasible after {} turns.".format(game_id, try_turn))
             solvable, potential_sol = solve_sat(try_game)
             if solvable:
                 solution = potential_sol
                 game = try_game
                 solvable_turn = try_turn
-                logger.verbose("Instance {} is feasible after {} turns: {}".format(game_id, solvable_turn, link(solution)))
+                logger.verbose("Instance {} is feasible after {} turns: {}#{}"
+                               .format(game_id, solvable_turn, link(solution), solvable_turn + 1))
             else:
                 unsolvable_turn = try_turn
-                logger.verbose("Instance {} is not feasible after {} turns".format(game_id, unsolvable_turn))
+                logger.verbose("Instance {} is not feasible after {} turns.".format(game_id, unsolvable_turn))
 
         assert unsolvable_turn - 1 == solvable_turn, "Programming error"
         return unsolvable_turn, solution

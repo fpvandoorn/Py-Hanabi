@@ -58,6 +58,7 @@ def main_parser() -> argparse.ArgumentParser:
         prog='hanabi_suite',
         description='High-level interface for analysis of hanabi instances.'
     )
+    parser.add_argument('--verbose', '-v', help='Enable verbose logging to console', action='store_true')
     subparsers = parser.add_subparsers(dest='command', required=True, help='select subcommand')
 
     add_init_subparser(subparsers)
@@ -72,6 +73,9 @@ if __name__ == "__main__":
     switcher = {
         'analyze': analyze_game
     }
+    if args.verbose:
+        logger_manager.set_console_level(verboselogs.VERBOSE)
     method_args = dict(vars(args))
     method_args.pop('command')
+    method_args.pop('verbose')
     switcher[args.command](**method_args)
