@@ -9,6 +9,7 @@ from hanabi import DeckCard, Action, ActionType, GameState, HanabiInstance
 from compress import link, decompress_deck
 from greedy_solver import GreedyStrategy
 from constants import COLOR_INITIALS
+from log_setup import logger
 
 
 # literals to model game as sat instance to check for feasibility
@@ -304,7 +305,7 @@ def solve_sat(starting_state: GameState | HanabiInstance) -> Tuple[bool, Optiona
 
     model = get_model(constraints)
     if model:
-        print_model(model, game_state, ls)
+        log_model(model, game_state, ls)
         solution = evaluate_model(model, copy.deepcopy(game_state), ls)
         return True, solution
     else:
@@ -317,21 +318,21 @@ def solve_sat(starting_state: GameState | HanabiInstance) -> Tuple[bool, Optiona
         return False, None
 
 
-def print_model(model, cur_game_state, ls: Literals):
+def log_model(model, cur_game_state, ls: Literals):
     deck = cur_game_state.deck
     first_turn = len(cur_game_state.actions)
     if first_turn > 0:
-        print('[print_model] Note: Omitting first {} turns, since they were fixed already.'.format(first_turn))
+        logger.debug('[print_model] Note: Omitting first {} turns, since they were fixed already.'.format(first_turn))
     for m in range(first_turn, cur_game_state.instance.max_winning_moves):
-        print('=== move {} ==='.format(m))
-        print('clues: ' + ''.join(str(i) for i in range(1, 9) if model.get_py_value(ls.clues[m][i])))
-        print('strikes: ' + ''.join(str(i) for i in range(1, 3) if model.get_py_value(ls.strikes[m][i])))
-        print('draw: ' + ', '.join('{}: {}'.format(i, deck[i]) for i in range(cur_game_state.progress, cur_game_state.instance.deck_size) if model.get_py_value(ls.draw[m][i])))
-        print('discard: ' + ', '.join('{}: {}'.format(i, deck[i]) for i in range(cur_game_state.instance.deck_size) if model.get_py_value(ls.discard[m][i])))
+        logger.debug('=== move {} ==='.format(m))
+        logger.debug('clues: ' + ''.join(str(i) for i in range(1, 9) if model.get_py_value(ls.clues[m][i])))
+        logger.debug('strikes: ' + ''.join(str(i) for i in range(1, 3) if model.get_py_value(ls.strikes[m][i])))
+        logger.debug('draw: ' + ', '.join('{}: {}'.format(i, deck[i]) for i in range(cur_game_state.progress, cur_game_state.instance.deck_size) if model.get_py_value(ls.draw[m][i])))
+        logger.debug('discard: ' + ', '.join('{}: {}'.format(i, deck[i]) for i in range(cur_game_state.instance.deck_size) if model.get_py_value(ls.discard[m][i])))
         for s in range(0, cur_game_state.instance.num_suits):
-            print('progress {}: '.format(COLOR_INITIALS[s]) + ''.join(str(r) for r in range(1, 6) if model.get_py_value(ls.progress[m][s, r])))
+            logger.debug('progress {}: '.format(COLOR_INITIALS[s]) + ''.join(str(r) for r in range(1, 6) if model.get_py_value(ls.progress[m][s, r])))
         flags = ['discard_any', 'draw_any', 'play', 'play5', 'incr_clues', 'strike', 'extraround', 'dummyturn']
-        print(', '.join(f for f in flags if model.get_py_value(getattr(ls, f)[m])))
+        logger.debug(', '.join(f for f in flags if model.get_py_value(getattr(ls, f)[m])))
 
 
 

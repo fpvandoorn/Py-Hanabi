@@ -1,10 +1,14 @@
 #! /usr/bin/python3
 
 import argparse
+import logging
+
+import verboselogs
 
 from check_game import check_game
 from download_data import detailed_export_game
 from compress import link
+from log_setup import logger, logger_manager
 
 """
 init db + populate tables
@@ -37,14 +41,15 @@ def add_analyze_subparser(subparsers):
 def analyze_game(game_id: int, download: bool = False):
     if download:
         detailed_export_game(game_id)
-    print('Analyzing game {}'.format(game_id))
+    logger.info('Analyzing game {}'.format(game_id))
     turn, sol = check_game(game_id)
     if turn == 0:
-        print('Instance is unfeasible')
+        logger.info('Instance is unfeasible')
     else:
-        print(
-            'Last winning turn was {}.\n'
-            'A replay achieving perfect score is: {}'.format(turn, link(sol))
+        logger.info('Game was first lost after {} turns.'.format(turn))
+        logger.info(
+            'A replay achieving perfect score from the previous turn onwards is: {}#{}'
+            .format(link(sol), turn)
         )
 
 

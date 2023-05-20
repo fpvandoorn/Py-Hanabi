@@ -1,3 +1,4 @@
-from .logger_setup import make_logger
+from .logger_setup import LoggerManager
 
-logger = make_logger()
+logger_manager = LoggerManager()
+logger = logger_manager.get_logger()
