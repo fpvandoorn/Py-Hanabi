@@ -12,3 +12,5 @@ remaining_cards.txt
 lost_seeds.txt
 utils.py
 infeasible_instances.txt
+debug_log.txt
+verbose_log.txt
