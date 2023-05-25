@@ -114,6 +114,8 @@ class HanabiInstance:
         self.player_names = constants.PLAYER_NAMES[:self.num_players]
         self.deck_size = len(self.deck)
 
+        self.initial_pace = self.deck_size - 5 * self.num_suits - self.num_players * (self.hand_size - 1)
+
         # # maximum number of moves in any game that can achieve max score each suit gives 15 moves, as we can play
         # and discard 5 cards each and give 5 clues. dark suits only give 5 moves, since no discards are added number
         # of cards that remain in players hands after end of game. they cost 2 turns each, since we cannot discard
@@ -155,8 +157,7 @@ class GameState:
         self.strikes = 0
         self.clues = 8
         self.turn = 0
-        self.pace = self.instance.deck_size - 5 * self.instance.num_suits - self.instance.num_players * (
-                self.instance.hand_size - 1)
+        self.pace = self.instance.initial_pace
         self.remaining_extra_turns = self.instance.num_players + 1
         self.trash = []
 
@@ -181,6 +182,7 @@ class GameState:
         else:
             self.strikes += 1
             self.trash.append(self.instance.deck[card_idx])
+            self.pace -= 1
         self.actions.append(Action(ActionType.Play, target=card_idx))
         self._replace(card_idx, allow_not_present=self.instance.deck_plays and (card_idx == self.deck_size - 1))
         self._make_turn()
@@ -233,7 +235,7 @@ class GameState:
         return self.over or self.is_known_lost()
 
     def is_won(self):
-        return self.score == 5 * instance.num_suits
+        return self.score == self.instance.max_score
 
     def is_known_lost(self):
         return self.in_lost_state
@@ -272,6 +274,27 @@ class GameState:
                 "variant": "No Variant",
             }
         }
+
+    # Query helpers for implementing bots
+    def copy_holders(self, card: DeckCard, exclude_player: Optional[int]):
+        return [
+            player for player in range(self.num_players)
+            if player != exclude_player and card in self.hands[player]
+        ]
+
+    @staticmethod
+    def in_strict_order(player_a, player_b, player_c):
+        """
+        Check whether the three given players sit in order, where equality is not allowed
+        :param player_a:
+        :param player_b:
+        :param player_c:
+        :return:
+        """
+        return player_a < player_b < player_c or player_b < player_c < player_a or player_c < player_a < player_b
+
+    def is_in_extra_round(self):
+        return self.remaining_extra_turns <= self.instance.num_players
 
     # Private helpers
 
