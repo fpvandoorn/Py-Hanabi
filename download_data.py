@@ -42,6 +42,7 @@ def detailed_export_game(game_id: int, score: Optional[int] = None, var_id: Opti
     one_extra_card = options.get('oneExtraCard', False)
     one_less_card = options.get('oneLessCard', False)
     all_or_nothing = options.get('allOrNothing', False)
+    starting_player = options.get('startingPlayer', 0)
     actions = [Action.from_json(action) for action in game_json.get('actions', [])]
     deck = [DeckCard.from_json(card) for card in game_json.get('deck', None)]
 
@@ -49,11 +50,18 @@ def detailed_export_game(game_id: int, score: Optional[int] = None, var_id: Opti
     assert seed is not None, assert_msg
 
     if score is None:
-        if deck_plays or one_less_card or one_extra_card or all_or_nothing:
-            # TODO: need to incorporate extra options here regarding hand size etc
-            raise RuntimeError('Not implemented.')
         # need to play through the game once to find out its score
-        game = HanabLiveGameState(HanabLiveInstance(deck, num_players, var_id))
+        game = HanabLiveGameState(
+            HanabLiveInstance(
+                deck, num_players, var_id,
+                deck_plays=deck_plays,
+                one_less_card=one_less_card,
+                one_extra_card=one_extra_card,
+                all_or_nothing=all_or_nothing
+            ),
+            starting_player
+        )
+        print(game.instance.hand_size, game.instance.num_players)
         for action in actions:
             game.make_action(action)
         score = game.score
