@@ -4,6 +4,8 @@ Disclaimer: This repository is still not in a good cleaned up code style, mainly
 Do not expect everything to work, do not expect everything to be well-documented
 However, I try to improve this from now on so that eventually, reasonable interfaces will exist so that this becomes actually more usable than now
 
+Generally speaking, stuff that is already in a proper package/subfolder should be alright and I plan to keep it clean (also with a clean git history)
+
 ## What is this?
 
 This is my personal attempt to write hanabi-related code to analyse and play around with the game.
