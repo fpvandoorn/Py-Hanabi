@@ -38,3 +38,5 @@ Apart from the obvious use-cases for some features, I want to explore boundaries
 - Analyse every seed on hanab.live for feasibility
 
 
+## Usage of stuff that already works:
+Use the `hanabi_suite.py` CLI interface to download games and analyze them
