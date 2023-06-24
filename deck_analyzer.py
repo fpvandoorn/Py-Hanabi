@@ -12,6 +12,7 @@ class InfeasibilityType(Enum):
     OutOfPace = 0           # idx denotes index of last card drawn before being forced to reduce pace, value denotes how bad pace is
     OutOfHandSize = 1       # idx denotes index of last card drawn before being forced to discard a crit
     NotTrivial = 2
+    CritAtBottom = 3
 
 
 class InfeasibilityReason():
@@ -26,6 +27,9 @@ class InfeasibilityReason():
                 return "Deck runs out of pace ({}) after drawing card {}".format(self.value, self.index)
             case InfeasibilityType.OutOfHandSize:
                 return "Deck runs out of hand size after drawing card {}".format(self.index)
+            case InfeasibilityType.CritAtBottom:
+                return "Deck has crit non-5 at bottom (index {})".format(self.index)
+
 
 def analyze_suit(occurrences):
     # denotes the indexes of copies we can use wlog
@@ -96,6 +100,9 @@ def analyze_card_usage(instance: HanabiInstance):
 
 
 def analyze(instance: HanabiInstance, find_non_trivial=False) -> InfeasibilityReason | None:
+
+    if instance.deck[-1].rank != 5 and instance.deck[-1].suitIndex + instance.num_dark_suits >= instance.num_suits:
+        return InfeasibilityReason(InfeasibilityType.CritAtBottom, instance.deck_size - 1)
 
     # we will sweep through the deck and pretend that we instantly play all cards
     # as soon as we have them (and recurse this)

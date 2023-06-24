@@ -218,6 +218,10 @@ class Variant:
             return True
         return suit.color_touches(self.colors[value])
 
+    @property
+    def max_score(self):
+        return self.num_suits * 5
+
     @staticmethod
     def from_db(var_id):
         cur.execute(

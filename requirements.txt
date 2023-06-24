@@ -7,3 +7,4 @@ psycopg2
 alive_progress
 argparse
 verboselogs
+pebble

@@ -1,0 +1,54 @@
+card types:
+trash, playable, useful (dispensable), critical
+
+
+pace          := #(cards left in deck) + #players - #(cards left to play)
+modified_pace := pace - #(players without useful cards)
+endgame       := #(cards left to play) - #(cards left in deck)   = #players - pace
+  -> endgame >= 0    iff   pace <= #players
+in_endgame    := endgame >= 0
+
+discard_badness(card) :=
+  1               if trash
+  8 - #players    if card useful but duplicate visible         # TODO: should probably account for rank of card as well, currently, lowest one is chosen
+  80 - 10*rank    if card is not critical but currently unique # this ensures we prefer to discard higher ranked cards
+  600 - 100*rank  if only criticals in hand                    # essentially not relevant, since we are currently only optimizing for full score 
+  
+ 
+Algorithm: 
+
+if (have playable card):
+  if (in endgame) and not (in extraround):
+    stall in the following situations:
+      - we have exactly one useful card, it is a 5, and a copy of each useful card is visible
+      - we have exactly one useful card, it is a 4, the player with the matching 5 has another critical card to play
+      - we have exactly one useful card (todo: maybe use critical here?), the deck has size 1, someone else has 2 crits
+      - we have exactly one playable card, it is a 4, and a further useful card, but the playable is redistributable in the following sense:
+          the other playing only has this one useful card, and the player holding the matching 5 sits after the to-be-redistributed player
+      - sth else that seems messy and is currently not understood, ignored for now
+  TODO: maybe introduce some midgame stalls here, since we know the deck?
+  play a card, matching the first of the following criteria. if several cards match, recurse with this set of cards
+    - if in extraround, play crit
+    - if in second last round and we have 2 crits, play crit
+    - play card with lowest rank
+    - play a critical card
+    - play unique card, i.e. not visible
+    - lowest suit index (for determinancy)
+
+if 8 hints:
+  give a hint
+
+if 0 hints:
+  discard card with lowest badness
+
+stall in the following situations:
+  - #(cards in deck) == 2 and (card of rank 3 or lower is missing) and we have the connecting card
+  - #clues >= 8 - #(useful cards in hand), there are useful cards in the deck and either:
+    - the next player has no useful cards at all
+    - we have two more crits than the next player and they have trash
+  - we are in endgame and the deck only contains one card
+  - it is possible that no-one discards in the following round and we are not waiting for a card whose rank is smaller than pace   // TODO: this feels like a weird condition
+
+discard if (discard badness) + #hints < 10
+
+stall if someone has a better discard
