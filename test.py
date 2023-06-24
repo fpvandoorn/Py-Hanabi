@@ -14,6 +14,28 @@ from database.database import conn, cur
 from database.init_database import init_database_tables, populate_static_tables
 
 
+def find_double_dark_games():
+    cur.execute("SELECT variants.id, variants.name, count(suits.id) from variants "
+                "inner join variant_suits on variants.id = variant_suits.variant_id "
+                "left join suits on suits.id = variant_suits.suit_id "
+                "where suits.dark = (%s) "
+                "group by variants.id "
+                "order by count(suits.id), variants.id",
+                (True,)
+                )
+    cur2 = conn.cursor()
+    r = []
+    for (var_id, var_name, num_dark_suits) in cur.fetchall():
+        if num_dark_suits == 2:
+            cur2.execute("select count(*) from games where variant_id = (%s)", (var_id,))
+            games = cur2.fetchone()[0]
+            cur2.execute("select count(*) from seeds where variant_id = (%s)", (var_id, ))
+            r.append((var_name, games, cur2.fetchone()[0]))
+    l = sorted(r, key=lambda e: -e[1])
+    for (name, games, seeds) in l:
+        print("{}: {} games on {} seeds".format(name, games, seeds))
+
+
 def test_suits():
     suit = Suit.from_db(55)
     print(suit.__dict__)
@@ -52,6 +74,8 @@ def export_all_seeds():
 
 
 if __name__ == "__main__":
+    find_double_dark_games()
+    exit(0)
     var_id = 964532
     export_all_seeds()
     exit(0)
