@@ -103,6 +103,7 @@ class HanabiInstance:
         self.fives_give_clue = fives_give_clue
         self.deck_plays = deck_plays,
         self.all_or_nothing = all_or_nothing
+        assert not self.all_or_nothing, "All or nothing not implemented"
 
         # normalize deck indices
         for (idx, card) in enumerate(self.deck):
@@ -145,7 +146,7 @@ class HanabiInstance:
 
 
 class GameState:
-    def __init__(self, instance: HanabiInstance):
+    def __init__(self, instance: HanabiInstance, starting_player: int = 0):
         # will not be modified
         self.instance = instance
 
@@ -156,7 +157,7 @@ class GameState:
         self.stacks = [0 for i in range(0, self.instance.num_suits)]
         self.strikes = 0
         self.clues = 8
-        self.turn = 0
+        self.turn = starting_player
         self.pace = self.instance.initial_pace
         self.remaining_extra_turns = self.instance.num_players + 1
         self.trash = []
@@ -310,7 +311,7 @@ class GameState:
     # replaces the specified card (has to be in current player's hand) with the next card of the deck (if nonempty)
     def _replace(self, card_idx, allow_not_present: bool = False):
         try:
-            idx_in_hand = next((i for (i, card) in enumerate(self.cur_hand) if card.deck_index == card_idx), None)
+            idx_in_hand = next((i for (i, card) in enumerate(self.cur_hand) if card.deck_index == card_idx))
         except StopIteration:
             if not allow_not_present:
                 raise
