@@ -12,6 +12,7 @@ from database.database import conn
 
 
 class CardType(Enum):
+    Dispensable = -1
     Trash = 0
     Playable = 1
     Critical = 2
