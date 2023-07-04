@@ -8,3 +8,4 @@ alive_progress
 argparse
 verboselogs
 pebble
+platformdirs

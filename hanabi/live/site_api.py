@@ -1,10 +1,13 @@
 import json
-import requests_cache
-from hanabi import logger
 
+import requests_cache
+import platformdirs
+
+from hanabi import logger
+from hanabi import constants
 
 # Cache all requests to site to reduce traffic and latency
-session = requests_cache.CachedSession('hanab.live')
+session = requests_cache.CachedSession(platformdirs.user_cache_dir(constants.APP_NAME) + '/hanab.live')
 
 
 def get(url, refresh=False):

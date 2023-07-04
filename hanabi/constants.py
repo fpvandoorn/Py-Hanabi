@@ -1,5 +1,6 @@
 # constants.py
 
+APP_NAME = 'hanabi-suite'
 
 # some values shared by all (default) hanabi instances
 HAND_SIZES = {2: 5, 3: 5, 4: 4, 5: 4, 6: 3}

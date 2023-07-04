@@ -1,5 +1,10 @@
 import logging
+import os
+
 import verboselogs
+import platformdirs
+
+from hanabi import constants
 
 
 class LoggerManager:
@@ -28,15 +33,18 @@ class LoggerManager:
         self.console_handler.setLevel(console_level)
         self.console_handler.setFormatter(self.nothing_formatter)
 
-        self.debug_file_handler = logging.FileHandler("debug_log.txt")
+        log_dir = platformdirs.user_log_dir(constants.APP_NAME)
+        os.makedirs(log_dir, exist_ok=True)
+
+        self.debug_file_handler = logging.FileHandler(log_dir + "/debug_log.txt")
         self.debug_file_handler.setFormatter(self.file_formatter)
         self.debug_file_handler.setLevel(logging.DEBUG)
 
-        self.verbose_file_handler = logging.FileHandler("verbose_log.txt")
+        self.verbose_file_handler = logging.FileHandler(log_dir + "/verbose_log.txt")
         self.verbose_file_handler.setFormatter(self.file_formatter)
         self.verbose_file_handler.setLevel(verboselogs.VERBOSE)
 
-        self.info_file_handler = logging.FileHandler("log.txt")
+        self.info_file_handler = logging.FileHandler(log_dir + "/log.txt")
         self.info_file_handler.setFormatter(self.info_file_formatter)
         self.info_file_handler.setLevel(logging.INFO)
 
