@@ -1,8 +1,11 @@
 import json
 import requests
 from pathlib import Path
-from hanabi import logger
 
+import platformdirs
+
+from hanabi import logger
+from hanabi import constants
 from .database import cur, conn
 
 
@@ -171,14 +174,21 @@ def _populate_variants(variants):
 def _download_json_files():
     logger.verbose("Downloading JSON files for suits and variants from github...")
     base_url = "https://raw.githubusercontent.com/Hanabi-Live/hanabi-live/main/packages/data/src/json"
+    cache_dir = Path(platformdirs.user_cache_dir(constants.APP_NAME))
+    cache_dir.mkdir(parents=True, exist_ok=True)
     data = {}
     for name in ["suits", "variants"]:
-        filename = name + '.json'
-        url = base_url + "/" + filename
+        file = (cache_dir / name).with_suffix(".json")
+        if file.exists():
+            data[name] = json.loads(file.read_text())
+            continue
+        url = base_url + "/" + file.name
+        print("foo")
         response = requests.get(url)
         if not response.status_code == 200:
             err_msg = "Could not download initialization file {} from github (tried url {})".format(filename, url)
             logger.error(err_msg)
             raise RuntimeError(err_msg)
+        file.write_text(response.text)
         data[name] = json.loads(response.text)
     return data['suits'], data['variants']

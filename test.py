@@ -2,6 +2,7 @@ from hanabi.live.variants import Variant
 from hanabi.live.variants import Suit
 from hanabi.live.download_data import download_games, detailed_export_game
 from hanabi.database.database import conn, cur
+from hanabi.database import init_database
 
 from hanabi.hanabi_cli import hanabi_cli
 
@@ -65,6 +66,8 @@ def export_all_seeds():
 
 
 if __name__ == "__main__":
+    init_database.init_database_tables()
+    init_database.populate_static_tables()
     hanabi_cli()
     exit(0)
     find_double_dark_games()
