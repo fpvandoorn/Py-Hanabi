@@ -3,11 +3,11 @@ from pysmt.shortcuts import Symbol, Bool, Not, Implies, Iff, And, Or, AtMostOne,
 from pysmt.typing import INT
 from typing import Optional, Tuple
 
-from hanabi import DeckCard, GameState, HanabiInstance
+from hanabi.game import DeckCard, GameState, HanabiInstance
 from hanabi.live.compress import link, decompress_deck
 from greedy_solver import GreedyStrategy
 from hanabi.constants import COLOR_INITIALS
-from hanabi.log_setup import logger
+from hanabi import logger
 
 
 # literals to model game as sat instance to check for feasibility

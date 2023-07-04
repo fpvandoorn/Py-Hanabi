@@ -1,7 +1,6 @@
 import json
-import requests
 import requests_cache
-from log_setup import logger
+from hanabi import logger
 
 
 # Cache all requests to site to reduce traffic and latency

@@ -1,14 +1,10 @@
 #! /bin/python3
-import json
 import sys
 import more_itertools
 
-from enum import Enum
-from termcolor import colored
-from typing import List, Optional, Union
+from typing import List, Union
 
-from variants import variant_id, variant_name
-from hanabi import DeckCard, ActionType, Action, GameState, HanabiInstance
+from hanabi.game import DeckCard, ActionType, Action, GameState, HanabiInstance
 from hanab_live import HanabLiveGameState, HanabLiveInstance
 
 

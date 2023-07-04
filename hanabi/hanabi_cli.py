@@ -4,10 +4,10 @@ import argparse
 
 import verboselogs
 
-from check_game import check_game
+from hanabi import logger
+from hanabi.live.check_game import check_game
 from hanabi.live.download_data import detailed_export_game
 from hanabi.live.compress import link
-from hanabi.log_setup import logger, logger_manager
 
 """
 init db + populate tables

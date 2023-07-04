@@ -9,7 +9,7 @@ from hanabi.live.compress import compress_deck, compress_actions, DeckCard, Acti
 from hanabi.live.variants import variant_id, variant_name
 from hanab_live import HanabLiveInstance, HanabLiveGameState
 
-from hanabi.log_setup import logger
+from hanabi import logger
 
 
 #

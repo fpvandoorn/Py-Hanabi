@@ -1,7 +1,7 @@
 import json
 import requests
 from pathlib import Path
-from log_setup import logger
+from hanabi import logger
 
 from .database import cur, conn
 

@@ -1,5 +1,5 @@
+from typing import Optional
 import psycopg2
-from typing import Optional, Dict
 
 # global connection
 conn = psycopg2.connect("dbname=hanab-live-2 user=postgres")

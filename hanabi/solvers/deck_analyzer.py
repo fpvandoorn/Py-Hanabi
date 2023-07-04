@@ -1,8 +1,8 @@
 from hanabi.live.compress import DeckCard
 from enum import Enum
 
-from database import conn
-from hanabi import HanabiInstance, pp_deck
+from hanabi.database import conn
+from hanabi.game import HanabiInstance, pp_deck
 from hanabi.live.compress import decompress_deck
 
 

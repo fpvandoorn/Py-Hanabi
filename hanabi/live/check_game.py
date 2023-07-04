@@ -1,12 +1,12 @@
 import copy
 from typing import Tuple
 
-from database import conn
+from hanabi.database import conn
 from hanabi.live.compress import decompress_deck, decompress_actions, link
-from hanabi import GameState
+from hanabi.game import GameState
 from hanabi.live.hanab_live import HanabLiveInstance, HanabLiveGameState
-from sat import solve_sat
-from hanabi.log_setup import logger
+from hanabi.solvers.sat import solve_sat
+from hanabi import logger
 
 
 # returns minimal number T of turns (from game) after which instance was infeasible

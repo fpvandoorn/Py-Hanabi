@@ -1,6 +1,6 @@
 import enum
 from typing import List, Optional
-from hanabi import DeckCard, ActionType
+from hanabi.game import DeckCard, ActionType
 
 from hanabi.database.database import cur
 

@@ -2,10 +2,10 @@
 import collections
 import sys
 from enum import Enum
-from hanabi.log_setup import logger
+from hanabi import logger
 from typing import Optional
 
-from hanabi import DeckCard, GameState, HanabiInstance
+from hanabi.game import DeckCard, GameState, HanabiInstance
 from hanabi.live.compress import link, decompress_deck
 from hanabi.database.database import conn
 

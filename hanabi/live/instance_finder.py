@@ -4,17 +4,17 @@ import concurrent.futures
 
 import traceback
 
-from sat import solve_sat
+from hanabi.solvers.sat import solve_sat
 from hanabi.database.database import conn, cur
 from hanabi.live.download_data import detailed_export_game
 from alive_progress import alive_bar
 from hanabi.live.compress import decompress_deck, link
-from hanabi import HanabiInstance
+from hanabi.game import HanabiInstance
 from threading import Lock
 from time import perf_counter
-from greedy_solver import GameState, GreedyStrategy
-from hanabi.log_setup import logger
-from deck_analyzer import analyze, InfeasibilityReason
+from hanabi.solvers.greedy_solver import GameState, GreedyStrategy
+from hanabi import logger
+from hanabi.solvers.deck_analyzer import analyze, InfeasibilityReason
 from hanabi.live.variants import Variant
 
 MAX_PROCESSES = 6
@@ -98,7 +98,7 @@ def get_decks_for_all_seeds():
     res = cur.fetchall()
     with alive_bar(len(res), title="Exporting decks") as bar:
         for (game_id,) in res:
-            export_game(game_id)
+            detailed_export_game(game_id)
             bar()
 
 

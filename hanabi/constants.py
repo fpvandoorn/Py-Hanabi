@@ -8,9 +8,9 @@ COLOR_INITIALS = 'rygbpt'
 PLAYER_NAMES = ["Alice", "Bob", "Cathy", "Donald", "Emily", "Frank"]
 
 
-#### hanab.live stuff
+# hanab.live stuff
 
-# Id of no variant
+# id of no variant
 NO_VARIANT_ID = 0
 
 # a map (num_suits, num_dark_suits) -> variant id of a variant on hanab.live fitting that distribution
