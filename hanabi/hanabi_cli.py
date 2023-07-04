@@ -66,6 +66,7 @@ def main_parser() -> argparse.ArgumentParser:
 
     return parser
 
+
 def hanabi_cli():
     args = main_parser().parse_args()
     switcher = {
