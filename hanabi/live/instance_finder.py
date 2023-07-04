@@ -5,17 +5,17 @@ import concurrent.futures
 import traceback
 
 from sat import solve_sat
-from database.database import conn, cur
-from download_data import detailed_export_game
+from hanabi.database.database import conn, cur
+from hanabi.live.download_data import detailed_export_game
 from alive_progress import alive_bar
-from compress import decompress_deck, link
+from hanabi.live.compress import decompress_deck, link
 from hanabi import HanabiInstance
 from threading import Lock
 from time import perf_counter
 from greedy_solver import GameState, GreedyStrategy
-from log_setup import logger
+from hanabi.log_setup import logger
 from deck_analyzer import analyze, InfeasibilityReason
-from variants import Variant
+from hanabi.live.variants import Variant
 
 MAX_PROCESSES = 6
 

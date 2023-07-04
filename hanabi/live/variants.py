@@ -2,7 +2,7 @@ import enum
 from typing import List, Optional
 from hanabi import DeckCard, ActionType
 
-from database.database import cur
+from hanabi.database.database import cur
 
 
 def variant_id(name) -> Optional[int]:

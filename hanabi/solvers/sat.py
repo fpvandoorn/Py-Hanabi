@@ -1,16 +1,13 @@
 import copy
-from pysmt.shortcuts import Symbol, Bool, Not, Implies, Iff, And, Or, AtMostOne, ExactlyOne, get_model, get_atoms, get_formula_size, get_unsat_core, Equals, GE, NotEquals, Int
+from pysmt.shortcuts import Symbol, Bool, Not, Implies, Iff, And, Or, AtMostOne, get_model, Equals, GE, NotEquals, Int
 from pysmt.typing import INT
-from pysmt.rewritings import conjunctive_partition
-import json
-from typing import List, Optional, Tuple
-from concurrent.futures import ProcessPoolExecutor
+from typing import Optional, Tuple
 
-from hanabi import DeckCard, Action, ActionType, GameState, HanabiInstance
-from compress import link, decompress_deck
+from hanabi import DeckCard, GameState, HanabiInstance
+from hanabi.live.compress import link, decompress_deck
 from greedy_solver import GreedyStrategy
-from constants import COLOR_INITIALS
-from log_setup import logger
+from hanabi.constants import COLOR_INITIALS
+from hanabi.log_setup import logger
 
 
 # literals to model game as sat instance to check for feasibility

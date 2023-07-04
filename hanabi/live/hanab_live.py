@@ -1,8 +1,8 @@
-from typing import List, Optional
+from typing import List
 
 import hanabi
-import constants
-from variants import Variant
+from hanabi import constants
+from hanabi.live.variants import Variant
 
 
 class HanabLiveInstance(hanabi.HanabiInstance):

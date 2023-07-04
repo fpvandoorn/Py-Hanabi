@@ -2,7 +2,7 @@ from typing import Optional, List
 from enum import Enum
 from termcolor import colored
 
-import constants
+from hanabi import constants
 
 
 class DeckCard:

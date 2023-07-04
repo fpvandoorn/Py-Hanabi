@@ -3,13 +3,13 @@ from typing import Dict, Optional
 
 import psycopg2.errors
 
-from site_api import get, api, replay
-from database.database import Game, store, load, commit, conn, cur
-from compress import compress_deck, compress_actions, DeckCard, Action, InvalidFormatError
-from variants import variant_id, variant_name
+from hanabi.live.site_api import get, api
+from hanabi.database.database import conn, cur
+from hanabi.live.compress import compress_deck, compress_actions, DeckCard, Action, InvalidFormatError
+from hanabi.live.variants import variant_id, variant_name
 from hanab_live import HanabLiveInstance, HanabLiveGameState
 
-from log_setup import logger
+from hanabi.log_setup import logger
 
 
 #

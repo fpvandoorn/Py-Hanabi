@@ -2,13 +2,12 @@
 import collections
 import sys
 from enum import Enum
-from log_setup import logger
-from typing import Tuple, List, Optional
-from time import sleep
+from hanabi.log_setup import logger
+from typing import Optional
 
-from hanabi import DeckCard, Action, ActionType, GameState, HanabiInstance
-from compress import link, decompress_deck
-from database.database import conn
+from hanabi import DeckCard, GameState, HanabiInstance
+from hanabi.live.compress import link, decompress_deck
+from hanabi.database.database import conn
 
 
 class CardType(Enum):

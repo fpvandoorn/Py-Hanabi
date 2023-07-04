@@ -1,11 +1,9 @@
-from compress import DeckCard
-from typing import List
+from hanabi.live.compress import DeckCard
 from enum import Enum
 
 from database import conn
 from hanabi import HanabiInstance, pp_deck
-from compress import decompress_deck
-import constants
+from hanabi.live.compress import decompress_deck
 
 
 class InfeasibilityType(Enum):
