@@ -1,6 +1,6 @@
 import enum
 from typing import List, Optional
-from hanabi.game import DeckCard, ActionType
+from hanabi import hanab_game
 
 from hanabi.database.database import cur
 
@@ -161,7 +161,7 @@ class Variant:
     def _synesthesia_ranks(self, color_value: int) -> List[int]:
         return [rank for rank in self.ranks if (rank - color_value) % len(self.colors) == 0]
 
-    def rank_touches(self, card: DeckCard, value: int):
+    def rank_touches(self, card: hanab_game.DeckCard, value: int):
         assert 0 <= card.suitIndex < self.num_suits,\
             f"Unexpected card {card}, suitIndex {card.suitIndex} out of bounds for {self.num_suits} suits."
         assert not self.no_rank_clues, "Cluing rank not allowed in this variant."
@@ -186,7 +186,7 @@ class Variant:
         ranks = self._preprocess_rank(value)
         return any(self.suits[card.suitIndex].rank_touches(card.rank, rank) for rank in ranks)
 
-    def color_touches(self, card: DeckCard, value: int):
+    def color_touches(self, card: hanab_game.DeckCard, value: int):
         assert 0 <= card.suitIndex < self.num_suits, \
             f"Unexpected card {card}, suitIndex {card.suitIndex} out of bounds for {self.num_suits} suits."
         assert not self.no_color_clues, "Cluing color not allowed in this variant."

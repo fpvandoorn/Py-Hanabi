@@ -1,14 +1,14 @@
 from typing import List
 
-import hanabi
+from hanabi import hanab_game
 from hanabi import constants
-from hanabi.live.variants import Variant
+from hanabi.live import variants
 
 
-class HanabLiveInstance(hanabi.HanabiInstance):
+class HanabLiveInstance(hanab_game.HanabiInstance):
     def __init__(
             self,
-            deck: List[hanabi.DeckCard],
+            deck: List[hanab_game.DeckCard],
             num_players: int,
             variant_id: int,
             one_extra_card: bool = False,
@@ -24,10 +24,10 @@ class HanabLiveInstance(hanabi.HanabiInstance):
 
         super().__init__(deck, num_players, hand_size=hand_size, *args, **kwargs)
         self.variant_id = variant_id
-        self.variant = Variant.from_db(self.variant_id)
+        self.variant = variants.Variant.from_db(self.variant_id)
 
     @staticmethod
-    def select_standard_variant_id(instance: hanabi.HanabiInstance):
+    def select_standard_variant_id(instance: hanab_game.HanabiInstance):
         err_msg = "Hanabi instance not supported by hanab.live, cannot convert to HanabLiveInstance: "
         assert 3 <= instance.num_suits <= 6, \
             err_msg + "Illegal number of suits ({}) found, must be in range [3,6]".format(instance.num_suits)
@@ -40,40 +40,40 @@ class HanabLiveInstance(hanabi.HanabiInstance):
         return constants.VARIANT_IDS_STANDARD_DISTRIBUTIONS[instance.num_suits][instance.num_dark_suits]
 
 
-class HanabLiveGameState(hanabi.GameState):
+class HanabLiveGameState(hanab_game.GameState):
     def __init__(self, instance: HanabLiveInstance, starting_player: int = 0):
         super().__init__(instance, starting_player)
         self.instance: HanabLiveInstance = instance
 
     def make_action(self, action):
         match action.type:
-            case hanabi.ActionType.ColorClue | hanabi.ActionType.RankClue:
+            case hanab_game.ActionType.ColorClue | hanab_game.ActionType.RankClue:
                 assert(self.clues > 0)
                 self.actions.append(action)
                 self.clues -= self.instance.clue_increment
                 self._make_turn()
                 # TODO: could check that the clue specified is in fact legal
-            case hanabi.ActionType.Play:
+            case hanab_game.ActionType.Play:
                 self.play(action.target)
-            case hanabi.ActionType.Discard:
+            case hanab_game.ActionType.Discard:
                 self.discard(action.target)
-            case hanabi.ActionType.EndGame | hanabi.ActionType.VoteTerminate:
+            case hanab_game.ActionType.EndGame | hanab_game.ActionType.VoteTerminate:
                 self.over = True
 
-    def _waste_clue(self) -> hanabi.Action:
+    def _waste_clue(self) -> hanab_game.Action:
         for player in range(self.turn + 1, self.turn + self.num_players):
             for card in self.hands[player % self.num_players]:
                 for rank in self.instance.variant.ranks:
                     if self.instance.variant.rank_touches(card, rank):
-                        return hanabi.Action(
-                            hanabi.ActionType.RankClue,
+                        return hanab_game.Action(
+                            hanab_game.ActionType.RankClue,
                             player % self.num_players,
                             rank
                         )
                 for color in range(self.instance.variant.num_colors):
                     if self.instance.variant.color_touches(card, color):
-                        return hanabi.Action(
-                            hanabi.ActionType.ColorClue,
+                        return hanab_game.Action(
+                            hanab_game.ActionType.ColorClue,
                             player % self.num_players,
                             color
                         )

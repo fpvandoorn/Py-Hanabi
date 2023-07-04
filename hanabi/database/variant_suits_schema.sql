@@ -1,6 +1,6 @@
 /* Database schema for the tables storing information on available hanab.live variants, suits and colors */
 
-/* Available suits. The associated id is arbitrary upon initial generation, but fixed for referentiability */
+/* Available suits. The associated id is arbitrary upon initial generation, but fixed afterwards for identification */
 DROP TABLE IF EXISTS suits CASCADE;
 CREATE TABLE suits (
     id                SERIAL PRIMARY KEY,
@@ -27,7 +27,7 @@ CREATE TABLE suits (
 );
 CREATE INDEX suits_name_idx ON suits (name);
 
-/* Available color clues. The indexing is arbitrary upon initial generation, but fixed for referentiability */
+/* Available color clues. The indexing is arbitrary upon initial generation, but fixed afterwards for identification */
 DROP TABLE IF EXISTS colors CASCADE;
 CREATE TABLE colors (
     id       SERIAL PRIMARY KEY,
@@ -99,7 +99,7 @@ CREATE TABLE variants (
      */
     special_rank_ranks  SMALLINT NOT NULL DEFAULT 1,
     /**
-      Encodes how cards of the special rank (if present) are touched by colorss,
+      Encodes how cards of the special rank (if present) are touched by colors,
       in the same manner how we encoded in @table suits
      */
     special_rank_colors SMALLINT NOT NULL DEFAULT 1,

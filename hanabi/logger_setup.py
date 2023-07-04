@@ -24,7 +24,6 @@ class LoggerManager:
             '%(message)s'
         )
 
-
         self.console_handler = logging.StreamHandler()
         self.console_handler.setLevel(console_level)
         self.console_handler.setFormatter(self.nothing_formatter)

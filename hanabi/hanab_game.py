@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Generator
 from enum import Enum
 from termcolor import colored
 
@@ -30,7 +30,7 @@ class DeckCard:
         return 1000 * self.suitIndex + self.rank
 
 
-def pp_deck(deck: List[DeckCard]) -> str:
+def pp_deck(deck: Generator[DeckCard, None, None]) -> str:
     return "[" + ", ".join(card.colorize() for card in deck) + "]"
 
 

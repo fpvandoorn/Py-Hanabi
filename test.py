@@ -1,18 +1,9 @@
-import json
+from hanabi.live.variants import Variant
+from hanabi.live.variants import Suit
+from hanabi.live.download_data import download_games, detailed_export_game
+from hanabi.database.database import conn, cur
 
-import alive_progress
-import requests
-
-from variants import Variant
-from variants import Suit, variant_name
-from site_api import *
-from download_data import download_games, detailed_export_game
-from check_game import check_game
-from compress import link
-from database.database import conn, cur
-
-from database.init_database import init_database_tables, populate_static_tables
-
+from hanabi.hanabi_cli import hanabi_cli
 
 def find_double_dark_games():
     cur.execute("SELECT variants.id, variants.name, count(suits.id) from variants "
@@ -74,6 +65,8 @@ def export_all_seeds():
 
 
 if __name__ == "__main__":
+    hanabi_cli()
+    exit(0)
     find_double_dark_games()
     exit(0)
     var_id = 964532

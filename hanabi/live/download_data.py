@@ -3,11 +3,12 @@ from typing import Dict, Optional
 
 import psycopg2.errors
 
-from hanabi.live.site_api import get, api
-from hanabi.database.database import conn, cur
-from hanabi.live.compress import compress_deck, compress_actions, DeckCard, Action, InvalidFormatError
-from hanabi.live.variants import variant_id, variant_name
-from hanab_live import HanabLiveInstance, HanabLiveGameState
+from hanabi import hanab_game
+from hanabi.database import database
+from hanabi.live import site_api
+from hanabi.live import compress
+from hanabi.live import variants
+from hanabi.live import hanab_live
 
 from hanabi import logger
 
@@ -30,29 +31,29 @@ def detailed_export_game(game_id: int, score: Optional[int] = None, var_id: Opti
 
     assert_msg = "Invalid response format from hanab.live while exporting game id {}".format(game_id)
 
-    game_json = get("export/{}".format(game_id))
+    game_json = site_api.get("export/{}".format(game_id))
     assert game_json.get('id') == game_id, assert_msg
 
     players = game_json.get('players', [])
     num_players = len(players)
     seed = game_json.get('seed', None)
     options = game_json.get('options', {})
-    var_id = var_id or variant_id(options.get('variant', 'No Variant'))
+    var_id = var_id or variants.variant_id(options.get('variant', 'No Variant'))
     deck_plays = options.get('deckPlays', False)
     one_extra_card = options.get('oneExtraCard', False)
     one_less_card = options.get('oneLessCard', False)
     all_or_nothing = options.get('allOrNothing', False)
     starting_player = options.get('startingPlayer', 0)
-    actions = [Action.from_json(action) for action in game_json.get('actions', [])]
-    deck = [DeckCard.from_json(card) for card in game_json.get('deck', None)]
+    actions = [hanab_game.Action.from_json(action) for action in game_json.get('actions', [])]
+    deck = [hanab_game.DeckCard.from_json(card) for card in game_json.get('deck', None)]
 
     assert players != [], assert_msg
     assert seed is not None, assert_msg
 
     if score is None:
         # need to play through the game once to find out its score
-        game = HanabLiveGameState(
-            HanabLiveInstance(
+        game = hanab_live.HanabLiveGameState(
+            hanab_live.HanabLiveInstance(
                 deck, num_players, var_id,
                 deck_plays=deck_plays,
                 one_less_card=one_less_card,
@@ -67,18 +68,18 @@ def detailed_export_game(game_id: int, score: Optional[int] = None, var_id: Opti
         score = game.score
 
     try:
-        compressed_deck = compress_deck(deck)
-    except InvalidFormatError:
+        compressed_deck = compress.compress_deck(deck)
+    except compress.InvalidFormatError:
         logger.error("Failed to compress deck while exporting game {}: {}".format(game_id, deck))
         raise
     try:
-        compressed_actions = compress_actions(actions)
-    except InvalidFormatError:
+        compressed_actions = compress.compress_actions(actions)
+    except compress.InvalidFormatError:
         logger.error("Failed to compress actions while exporting game {}".format(game_id))
         raise
 
     if not seed_exists:
-        cur.execute(
+        database.cur.execute(
             "INSERT INTO seeds (seed, num_players, variant_id, deck)"
             "VALUES (%s, %s, %s, %s)"
             "ON CONFLICT (seed) DO NOTHING",
@@ -86,7 +87,7 @@ def detailed_export_game(game_id: int, score: Optional[int] = None, var_id: Opti
         )
         logger.debug("New seed {} imported.".format(seed))
 
-    cur.execute(
+    database.cur.execute(
         "INSERT INTO games ("
         "id, num_players, starting_player, score, seed, variant_id, deck_plays, one_extra_card, one_less_card,"
         "all_or_nothing, actions"
@@ -115,9 +116,9 @@ def process_game_row(game: Dict, var_id):
     if any(v is None for v in [game_id, seed, num_players, score]):
         raise ValueError("Unknown response format on hanab.live")
 
-    cur.execute("SAVEPOINT seed_insert")
+    database.cur.execute("SAVEPOINT seed_insert")
     try:
-        cur.execute(
+        database.cur.execute(
             "INSERT INTO games (id, seed, num_players, score, variant_id)"
             "VALUES"
             "(%s, %s ,%s ,%s ,%s)"
@@ -125,20 +126,20 @@ def process_game_row(game: Dict, var_id):
             (game_id, seed, num_players, score, var_id)
         )
     except psycopg2.errors.ForeignKeyViolation:
-        cur.execute("ROLLBACK TO seed_insert")
+        database.cur.execute("ROLLBACK TO seed_insert")
         detailed_export_game(game_id, score, var_id)
-    cur.execute("RELEASE seed_insert")
+    database.cur.execute("RELEASE seed_insert")
     logger.debug("Imported game {}".format(game_id))
 
 
 def download_games(var_id):
-    name = variant_name(var_id)
+    name = variants.variant_name(var_id)
     page_size = 100
     if name is None:
         raise ValueError("{} is not a known variant_id.".format(var_id))
 
     url = "variants/{}".format(var_id)
-    r = api(url, refresh=True)
+    r = site_api.api(url, refresh=True)
     if not r:
         raise RuntimeError("Failed to download request from hanab.live")
 
@@ -146,12 +147,12 @@ def download_games(var_id):
     if num_entries is None:
         raise ValueError("Unknown response format on hanab.live")
 
-    cur.execute(
+    database.cur.execute(
         "SELECT COUNT(*) FROM games WHERE variant_id = %s AND id <= "
         "(SELECT COALESCE (last_game_id, 0) FROM variant_game_downloads WHERE variant_id = %s)",
         (var_id, var_id)
     )
-    num_already_downloaded_games = cur.fetchone()[0]
+    num_already_downloaded_games = database.cur.fetchone()[0]
     assert num_already_downloaded_games <= num_entries, "Database inconsistent, too many games present."
     next_page = num_already_downloaded_games // page_size
     last_page = (num_entries - 1) // page_size
@@ -171,7 +172,7 @@ def download_games(var_id):
             enrich_print=False
     ) as bar:
         for page in range(next_page, last_page + 1):
-            r = api(url + "?col[0]=0&page={}".format(page), refresh=page == last_page)
+            r = site_api.api(url + "?col[0]=0&page={}".format(page), refresh=page == last_page)
             rows = r.get('rows', [])
             if page == next_page:
                 rows = rows[num_already_downloaded_games % 100:]
@@ -180,11 +181,10 @@ def download_games(var_id):
             for row in rows:
                 process_game_row(row, var_id)
                 bar()
-            cur.execute(
+            database.cur.execute(
                 "INSERT INTO variant_game_downloads (variant_id, last_game_id) VALUES"
                 "(%s, %s)"
                 "ON CONFLICT (variant_id) DO UPDATE SET last_game_id = EXCLUDED.last_game_id",
                 (var_id, r['rows'][-1]['id'])
             )
-            conn.commit()
-
+            database.conn.commit()

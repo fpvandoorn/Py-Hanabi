@@ -1,13 +1,12 @@
 import copy
-from pysmt.shortcuts import Symbol, Bool, Not, Implies, Iff, And, Or, AtMostOne, get_model, Equals, GE, NotEquals, Int
-from pysmt.typing import INT
 from typing import Optional, Tuple
 
-from hanabi.game import DeckCard, GameState, HanabiInstance
-from hanabi.live.compress import link, decompress_deck
-from greedy_solver import GreedyStrategy
-from hanabi.constants import COLOR_INITIALS
+from pysmt.shortcuts import Symbol, Bool, Not, Implies, Iff, And, Or, AtMostOne, get_model, Equals, GE, NotEquals, Int
+from pysmt.typing import INT
+
 from hanabi import logger
+from hanabi import constants
+from hanabi import hanab_game
 
 
 # literals to model game as sat instance to check for feasibility
@@ -15,16 +14,15 @@ from hanabi import logger
 class Literals():
     # num_suits is total number of suits, i.e. also counts the dark suits
     # default distribution among all suits is assumed
-    def __init__(self, instance: HanabiInstance):
-
+    def __init__(self, instance: hanab_game.HanabiInstance):
         # clues[m][i] == "after move m we have i clues", in clue starved, this counts half clues
         self.clues = {
-                -1: Int(16 if instance.clue_starved else 8)  # we have 8 clues after turn
-                , **{
-                        m: Symbol('m{}clues'.format(m), INT)
-                        for m in range(instance.max_winning_moves)
-                    }
-                }
+            -1: Int(16 if instance.clue_starved else 8)  # we have 8 clues after turn
+            , **{
+                m: Symbol('m{}clues'.format(m), INT)
+                for m in range(instance.max_winning_moves)
+            }
+        }
 
         self.pace = {
             -1: Int(instance.initial_pace)
@@ -36,78 +34,83 @@ class Literals():
 
         # strikes[m][i] == "after move m we have at least i strikes"
         self.strikes = {
-                    -1: {i: Bool(i == 0) for i in range(0, instance.num_strikes + 1)}    # no strikes when we start
-                  , **{
-                          m: {
-                              0: Bool(True),
-                              **{ s: Symbol('m{}strikes{}'.format(m,s)) for s in range(1, instance.num_strikes) },
-                              instance.num_strikes: Bool(False)                              # never so many clues that we lose. Implicitly forbids striking out
-                             }
-                          for m in range(instance.max_winning_moves)
-                      }
-                  }
+            -1: {i: Bool(i == 0) for i in range(0, instance.num_strikes + 1)}  # no strikes when we start
+            , **{
+                m: {
+                    0: Bool(True),
+                    **{s: Symbol('m{}strikes{}'.format(m, s)) for s in range(1, instance.num_strikes)},
+                    instance.num_strikes: Bool(False)
+                    # never so many clues that we lose. Implicitly forbids striking out
+                }
+                for m in range(instance.max_winning_moves)
+            }
+        }
 
         # extraturn[m] = "turn m is a move part of the extra round or a dummy turn"
         self.extraround = {
-                     -1: Bool(False)
-                     , **{
-                             m: Bool(False) if m < instance.draw_pile_size else Symbol('m{}extra'.format(m))   # it takes at least as many turns as cards in the draw pile to start the extra round
-                             for m in range(0, instance.max_winning_moves)
-                         }
-                     }
+            -1: Bool(False)
+            , **{
+                m: Bool(False) if m < instance.draw_pile_size else Symbol('m{}extra'.format(m))
+                # it takes at least as many turns as cards in the draw pile to start the extra round
+                for m in range(0, instance.max_winning_moves)
+            }
+        }
 
         # dummyturn[m] = "turn m is a dummy nurn and not actually part of the game"
         self.dummyturn = {
-                    -1: Bool(False)
-                    , **{
-                            m: Bool(False) if m < instance.draw_pile_size + instance.num_players else Symbol('m{}dummy'.format(m))
-                            for m in range(0, instance.max_winning_moves)
-                        }
-                    }
+            -1: Bool(False)
+            , **{
+                m: Bool(False) if m < instance.draw_pile_size + instance.num_players else Symbol('m{}dummy'.format(m))
+                for m in range(0, instance.max_winning_moves)
+            }
+        }
 
         # draw[m][i] == "at move m we play/discard deck[i]"
         self.discard = {
-                    m: {i: Symbol('m{}discard{}'.format(m, i)) for i in range(instance.deck_size)}
-                    for m in range(instance.max_winning_moves)
-                  }
+            m: {i: Symbol('m{}discard{}'.format(m, i)) for i in range(instance.deck_size)}
+            for m in range(instance.max_winning_moves)
+        }
 
         # draw[m][i] == "at move m we draw deck card i"
         self.draw = {
-                -1: { i: Bool(i == instance.num_dealt_cards - 1) for i in range(instance.num_dealt_cards - 1, instance.deck_size) }
-                , **{
-                        m: {
-                            instance.num_dealt_cards - 1: Bool(False),
-                            **{i: Symbol('m{}draw{}'.format(m, i)) for i in range(instance.num_dealt_cards, instance.deck_size)}
-                            }
-                        for m in range(instance.max_winning_moves)
-                    }
-               }
+            -1: {i: Bool(i == instance.num_dealt_cards - 1) for i in
+                 range(instance.num_dealt_cards - 1, instance.deck_size)}
+            , **{
+                m: {
+                    instance.num_dealt_cards - 1: Bool(False),
+                    **{i: Symbol('m{}draw{}'.format(m, i)) for i in range(instance.num_dealt_cards, instance.deck_size)}
+                }
+                for m in range(instance.max_winning_moves)
+            }
+        }
 
         # strike[m] = "at move m we get a strike"
         self.strike = {
-                 -1: Bool(False)
-                 , **{
-                        m: Symbol('m{}newstrike'.format(m))
-                        for m in range(instance.max_winning_moves)
-                     }
-                 }
+            -1: Bool(False)
+            , **{
+                m: Symbol('m{}newstrike'.format(m))
+                for m in range(instance.max_winning_moves)
+            }
+        }
 
         # progress[m][card = (suitIndex, rank)] == "after move m we have played in suitIndex up to rank"
         self.progress = {
-                     -1: {(s, r): Bool(r == 0) for s in range(0, instance.num_suits) for r in range(0, 6)} # at start, have only played rank zero
-                   , **{
-                           m: {
-                               **{(s, 0): Bool(True) for s in range(0, instance.num_suits)},
-                               **{(s, r): Symbol('m{}progress{}{}'.format(m, s, r)) for s in range(0, instance.num_suits) for r in range(1, 6)}
-                              }
-                           for m in range(instance.max_winning_moves)
-                       }
-                   }
+            -1: {(s, r): Bool(r == 0) for s in range(0, instance.num_suits) for r in range(0, 6)}
+            # at start, have only played rank zero
+            , **{
+                m: {
+                    **{(s, 0): Bool(True) for s in range(0, instance.num_suits)},
+                    **{(s, r): Symbol('m{}progress{}{}'.format(m, s, r)) for s in range(0, instance.num_suits) for r in
+                       range(1, 6)}
+                }
+                for m in range(instance.max_winning_moves)
+            }
+        }
 
         ## Utility variables
 
         # discard_any[m] == "at move m we play/discard a card"
-        self.discard_any = { m: Symbol('m{}discard_any'.format(m)) for m in range(instance.max_winning_moves) }
+        self.discard_any = {m: Symbol('m{}discard_any'.format(m)) for m in range(instance.max_winning_moves)}
 
         # draw_any[m] == "at move m we draw a card"
         self.draw_any = {m: Symbol('m{}draw_any'.format(m)) for m in range(instance.max_winning_moves)}
@@ -122,11 +125,12 @@ class Literals():
         self.incr_clues = {m: Symbol('m{}c+'.format(m)) for m in range(instance.max_winning_moves)}
 
 
-def solve_sat(starting_state: GameState | HanabiInstance, min_pace: Optional[int] = 0) -> Tuple[bool, Optional[GameState]]:
-    if isinstance(starting_state, HanabiInstance):
+def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, min_pace: Optional[int] = 0) -> Tuple[
+    bool, Optional[hanab_game.GameState]]:
+    if isinstance(starting_state, hanab_game.HanabiInstance):
         instance = starting_state
-        game_state = GameState(instance)
-    elif isinstance(starting_state, GameState):
+        game_state = hanab_game.GameState(instance)
+    elif isinstance(starting_state, hanab_game.GameState):
         instance = starting_state.instance
         game_state = starting_state
     else:
@@ -141,7 +145,7 @@ def solve_sat(starting_state: GameState | HanabiInstance, min_pace: Optional[int
     starting_hands = [[card.deck_index for card in hand] for hand in game_state.hands]
     first_turn = len(game_state.actions)
 
-    if isinstance(starting_state, GameState):
+    if isinstance(starting_state, hanab_game.GameState):
         # have to set additional variables
 
         # set initial clues
@@ -157,7 +161,7 @@ def solve_sat(starting_state: GameState | HanabiInstance, min_pace: Optional[int
 
         # check if extraround has started (usually not)
         ls.extraround[first_turn - 1] = Bool(game_state.remaining_extra_turns < game_state.num_players)
-        ls.dummyturn[first_turn -1] = Bool(False)
+        ls.dummyturn[first_turn - 1] = Bool(False)
 
         # set recent draws: important to model progress
         # we just pretend that the last card drawn was in fact drawn last turn,
@@ -168,7 +172,6 @@ def solve_sat(starting_state: GameState | HanabiInstance, min_pace: Optional[int
         # forbid re-drawing of the last card drawn
         for m in range(first_turn, instance.max_winning_moves):
             ls.draw[m][game_state.progress - 1] = Bool(False)
-
 
         # model initial progress
         for s in range(0, game_state.num_suits):
@@ -195,20 +198,24 @@ def solve_sat(starting_state: GameState | HanabiInstance, min_pace: Optional[int
         Implies(ls.play[m], ls.discard_any[m]),
 
         # definition of ls.play5
-        Iff(ls.play5[m], And(ls.play[m], Or(ls.discard[m][i] for i in range(instance.deck_size) if instance.deck[i].rank == 5))),
+        Iff(ls.play5[m],
+            And(ls.play[m], Or(ls.discard[m][i] for i in range(instance.deck_size) if instance.deck[i].rank == 5))),
 
         # definition of ls.incr_clues
-        Iff(ls.incr_clues[m], And(ls.discard_any[m], NotEquals(ls.clues[m-1], Int(16 if instance.clue_starved else 8)), Implies(ls.play[m], ls.play5[m]))),
+        Iff(ls.incr_clues[m],
+            And(ls.discard_any[m], NotEquals(ls.clues[m - 1], Int(16 if instance.clue_starved else 8)),
+                Implies(ls.play[m], ls.play5[m]))),
 
         # change of ls.clues
         Implies(And(Not(ls.discard_any[m]), Not(ls.dummyturn[m])),
-                Equals(ls.clues[m], ls.clues[m-1] - (2 if instance.clue_starved else 1))),
-        Implies(ls.incr_clues[m], Equals(ls.clues[m], ls.clues[m-1] + 1)),
-        Implies(And(Or(ls.discard_any[m], ls.dummyturn[m]), Not(ls.incr_clues[m])), Equals(ls.clues[m], ls.clues[m-1])),
+                Equals(ls.clues[m], ls.clues[m - 1] - (2 if instance.clue_starved else 1))),
+        Implies(ls.incr_clues[m], Equals(ls.clues[m], ls.clues[m - 1] + 1)),
+        Implies(And(Or(ls.discard_any[m], ls.dummyturn[m]), Not(ls.incr_clues[m])),
+                Equals(ls.clues[m], ls.clues[m - 1])),
 
         # change of pace
-        Implies(And(ls.discard_any[m], Or(ls.strike[m], Not(ls.play[m]))), Equals(ls.pace[m], ls.pace[m-1] - 1)),
-        Implies(Or(Not(ls.discard_any[m]), And(Not(ls.strike[m]), ls.play[m])), Equals(ls.pace[m], ls.pace[m-1])),
+        Implies(And(ls.discard_any[m], Or(ls.strike[m], Not(ls.play[m]))), Equals(ls.pace[m], ls.pace[m - 1] - 1)),
+        Implies(Or(Not(ls.discard_any[m]), And(Not(ls.strike[m]), ls.play[m])), Equals(ls.pace[m], ls.pace[m - 1])),
 
         # pace is nonnegative
         GE(ls.pace[m], Int(min_pace)),
@@ -218,85 +225,95 @@ def solve_sat(starting_state: GameState | HanabiInstance, min_pace: Optional[int
         # It's easy to see that if there is any solution to the instance, then there is also one where we only strike at 8 clues
         # (or not at all) -> Just strike later if neccessary
         # So, we decrease the solution space with this formulation, but do not change whether it's empty or not
-        Iff(ls.strike[m], And(ls.discard_any[m], Not(ls.play[m]), Equals(ls.clues[m-1], Int(16 if instance.clue_starved else 8)))),
+        Iff(ls.strike[m],
+            And(ls.discard_any[m], Not(ls.play[m]), Equals(ls.clues[m - 1], Int(16 if instance.clue_starved else 8)))),
 
         # change of strikes
-        *[Iff(ls.strikes[m][i], Or(ls.strikes[m-1][i], And(ls.strikes[m-1][i-1], ls.strike[m]))) for i in range(1, instance.num_strikes + 1)],
+        *[Iff(ls.strikes[m][i], Or(ls.strikes[m - 1][i], And(ls.strikes[m - 1][i - 1], ls.strike[m]))) for i in
+          range(1, instance.num_strikes + 1)],
 
         # less than 0 clues not allowed
-        Implies(Not(ls.discard_any[m]), Or(GE(ls.clues[m-1], Int(1)), ls.dummyturn[m])),
+        Implies(Not(ls.discard_any[m]), Or(GE(ls.clues[m - 1], Int(1)), ls.dummyturn[m])),
 
         # we can only draw card i if the last ls.drawn card was i-1
-        *[Implies(ls.draw[m][i], Or(And(ls.draw[m0][i-1], *[Not(ls.draw_any[m1]) for m1 in range(m0+1, m)]) for m0 in range(max(first_turn - 1, m-9), m))) for i in range(game_state.progress, instance.deck_size)],
+        *[Implies(ls.draw[m][i], Or(
+            And(ls.draw[m0][i - 1], *[Not(ls.draw_any[m1]) for m1 in range(m0 + 1, m)]) for m0 in
+            range(max(first_turn - 1, m - 9), m))) for i in range(game_state.progress, instance.deck_size)],
 
         # we can only draw at most one card (NOTE: redundant, FIXME: avoid quadratic formula)
         AtMostOne(ls.draw[m][i] for i in range(game_state.progress, instance.deck_size)),
 
         # we can only discard a card if we drew it earlier...
-        *[Implies(ls.discard[m][i], Or(ls.draw[m0][i] for m0 in range(m-instance.num_players, first_turn - 1, -instance.num_players))) for i in range(game_state.progress, instance.deck_size)],
+        *[Implies(ls.discard[m][i],
+                  Or(ls.draw[m0][i] for m0 in range(m - instance.num_players, first_turn - 1, -instance.num_players)))
+          for i in range(game_state.progress, instance.deck_size)],
 
         # ...or if it was part of the initial hand
-        *[Not(ls.discard[m][i]) for i in range(0, game_state.progress) if i not in starting_hands[m % instance.num_players] ],
+        *[Not(ls.discard[m][i]) for i in range(0, game_state.progress) if
+          i not in starting_hands[m % instance.num_players]],
 
         # we can only discard a card if we did not discard it yet
-        *[Implies(ls.discard[m][i], And(Not(ls.discard[m0][i]) for m0 in range(m-instance.num_players, first_turn - 1, -instance.num_players))) for i in range(instance.deck_size)],
+        *[Implies(ls.discard[m][i], And(
+            Not(ls.discard[m0][i]) for m0 in range(m - instance.num_players, first_turn - 1, -instance.num_players)))
+          for i in range(instance.deck_size)],
 
         # we can only discard at most one card (FIXME: avoid quadratic formula)
         AtMostOne(ls.discard[m][i] for i in range(instance.deck_size)),
 
         # we can only play a card if it matches the progress
         *[Implies(
-                    And(ls.discard[m][i], ls.play[m]),
-                    And(
-                        Not(ls.progress[m-1][instance.deck[i].suitIndex, instance.deck[i].rank]),
-                        ls.progress[m-1][instance.deck[i].suitIndex, instance.deck[i].rank-1 ]
-                       )
-                  )
-          for i in range(instance.deck_size)
-          ],
+            And(ls.discard[m][i], ls.play[m]),
+            And(
+                Not(ls.progress[m - 1][instance.deck[i].suitIndex, instance.deck[i].rank]),
+                ls.progress[m - 1][instance.deck[i].suitIndex, instance.deck[i].rank - 1]
+            )
+        )
+            for i in range(instance.deck_size)
+        ],
 
         # change of progress
         *[
             Iff(
                 ls.progress[m][s, r],
                 Or(
-                    ls.progress[m-1][s, r],
+                    ls.progress[m - 1][s, r],
                     And(ls.play[m], Or(ls.discard[m][i]
-                        for i in range(0, instance.deck_size)
-                        if instance.deck[i] == DeckCard(s, r) ))
-                  )
+                                       for i in range(0, instance.deck_size)
+                                       if instance.deck[i] == hanab_game.DeckCard(s, r)))
                 )
+            )
             for s in range(0, instance.num_suits)
             for r in range(1, 6)
-         ],
+        ],
 
         # extra round bool
-        Iff(ls.extraround[m], Or(ls.extraround[m-1], ls.draw[m-1][instance.deck_size-1])),
+        Iff(ls.extraround[m], Or(ls.extraround[m - 1], ls.draw[m - 1][instance.deck_size - 1])),
 
         # dummy turn bool
-        *[Iff(ls.dummyturn[m], Or(ls.dummyturn[m-1], ls.draw[m-1 - instance.num_players][instance.deck_size-1])) for i in range(0,1) if m >= instance.num_players]
+        *[Iff(ls.dummyturn[m], Or(ls.dummyturn[m - 1], ls.draw[m - 1 - instance.num_players][instance.deck_size - 1]))
+          for i in range(0, 1) if m >= instance.num_players]
     )
 
     win = And(
         # maximum progress at each color
-        *[ls.progress[instance.max_winning_moves-1][s, 5] for s in range(0, instance.num_suits)],
+        *[ls.progress[instance.max_winning_moves - 1][s, 5] for s in range(0, instance.num_suits)],
 
         # played every color/value combination (NOTE: redundant, but makes solving faster)
         *[
             Or(
-               And(ls.discard[m][i], ls.play[m])
-               for m in range(first_turn, instance.max_winning_moves)
-               for i in range(instance.deck_size)
-               if game_state.deck[i] == DeckCard(s, r)
-              )
-          for s in range(0, instance.num_suits)
-          for r in range(1, 6)
-          if r > game_state.stacks[s]
-          ]
+                And(ls.discard[m][i], ls.play[m])
+                for m in range(first_turn, instance.max_winning_moves)
+                for i in range(instance.deck_size)
+                if game_state.deck[i] == hanab_game.DeckCard(s, r)
+            )
+            for s in range(0, instance.num_suits)
+            for r in range(1, 6)
+            if r > game_state.stacks[s]
+        ]
     )
 
     constraints = And(*[valid_move(m) for m in range(first_turn, instance.max_winning_moves)], win)
-#    print('Solving instance with {} variables, {} nodes'.format(len(get_atoms(constraints)), get_formula_size(constraints)))
+    #    print('Solving instance with {} variables, {} nodes'.format(len(get_atoms(constraints)), get_formula_size(constraints)))
 
     model = get_model(constraints)
     if model:
@@ -304,11 +321,11 @@ def solve_sat(starting_state: GameState | HanabiInstance, min_pace: Optional[int
         solution = evaluate_model(model, copy.deepcopy(game_state), ls)
         return True, solution
     else:
-        #conj = list(conjunctive_partition(constraints))
-        #print('statements: {}'.format(len(conj)))
-        #ucore = get_unsat_core(conj)
-        #print('unsat core size: {}'.format(len(ucore)))
-        #for f in ucore:
+        # conj = list(conjunctive_partition(constraints))
+        # print('statements: {}'.format(len(conj)))
+        # ucore = get_unsat_core(conj)
+        # print('unsat core size: {}'.format(len(ucore)))
+        # for f in ucore:
         #    print(f.serialize())
         return False, None
 
@@ -322,24 +339,29 @@ def log_model(model, cur_game_state, ls: Literals):
         logger.debug('=== move {} ==='.format(m))
         logger.debug('clues: {}'.format(model.get_py_value(ls.clues[m])))
         logger.debug('strikes: ' + ''.join(str(i) for i in range(1, 3) if model.get_py_value(ls.strikes[m][i])))
-        logger.debug('draw: ' + ', '.join('{}: {}'.format(i, deck[i]) for i in range(cur_game_state.progress, cur_game_state.instance.deck_size) if model.get_py_value(ls.draw[m][i])))
-        logger.debug('discard: ' + ', '.join('{}: {}'.format(i, deck[i]) for i in range(cur_game_state.instance.deck_size) if model.get_py_value(ls.discard[m][i])))
+        logger.debug('draw: ' + ', '.join(
+            '{}: {}'.format(i, deck[i]) for i in range(cur_game_state.progress, cur_game_state.instance.deck_size) if
+            model.get_py_value(ls.draw[m][i])))
+        logger.debug('discard: ' + ', '.join(
+            '{}: {}'.format(i, deck[i]) for i in range(cur_game_state.instance.deck_size) if
+            model.get_py_value(ls.discard[m][i])))
         logger.debug('pace: {}'.format(model.get_py_value(ls.pace[m])))
         for s in range(0, cur_game_state.instance.num_suits):
-            logger.debug('progress {}: '.format(COLOR_INITIALS[s]) + ''.join(str(r) for r in range(1, 6) if model.get_py_value(ls.progress[m][s, r])))
+            logger.debug('progress {}: '.format(constants.COLOR_INITIALS[s]) + ''.join(
+                str(r) for r in range(1, 6) if model.get_py_value(ls.progress[m][s, r])))
         flags = ['discard_any', 'draw_any', 'play', 'play5', 'incr_clues', 'strike', 'extraround', 'dummyturn']
         logger.debug(', '.join(f for f in flags if model.get_py_value(getattr(ls, f)[m])))
 
 
-
 # given the initial game state and the model found by the SAT solver,
 # evaluates the model to produce a full game history
-def evaluate_model(model, cur_game_state: GameState, ls: Literals) -> GameState:
+def evaluate_model(model, cur_game_state: hanab_game.GameState, ls: Literals) -> hanab_game.GameState:
     for m in range(len(cur_game_state.actions), cur_game_state.instance.max_winning_moves):
         if model.get_py_value(ls.dummyturn[m]) or cur_game_state.is_over():
             break
         if model.get_py_value(ls.discard_any[m]):
-            card_idx = next(i for i in range(0, cur_game_state.instance.deck_size) if model.get_py_value(ls.discard[m][i]))
+            card_idx = next(
+                i for i in range(0, cur_game_state.instance.deck_size) if model.get_py_value(ls.discard[m][i]))
             if model.get_py_value(ls.play[m]) or model.get_py_value(ls.strike[m]):
                 cur_game_state.play(card_idx)
             else:
@@ -348,39 +370,3 @@ def evaluate_model(model, cur_game_state: GameState, ls: Literals) -> GameState:
             cur_game_state.clue()
 
     return cur_game_state
-
-
-
-def run_deck():
-    puzzle = True
-    if puzzle:
-        deck_str = 'p5 p3 b4 r5 y4 y4 y5 r4 b2 y2 y3 g5 g2 g3 g4 p4 r3 b2 b3 b3 p4 b1 p2 b1 b1 p2 p1 p1 g1 r4 g1 r1 r3 r1 g1 r1 p1 b4 p3 g2 g3 g4 b5 y1 y1 y1 r2 r2 y2 y3'
-
-        deck = [DeckCard(COLOR_INITIALS.index(c[0]), int(c[1])) for c in deck_str.split(" ")]
-        num_p = 5
-    else:
-        deck_str = "15gfvqluvuwaqnmrkpkaignlaxpjbmsprksfcddeybfixchuhtwo"
-        deck_str = "15diuknfwhqbplsrlkxjuvfbwyacoaxgtudcerskqfnhpgampmiv"
-        deck_str = "15jdxlpobvikrnhkslcuwggimtphafquqfvcwadampxkeyfrbnsu"
-        deck = decompress_deck(deck_str)
-        num_p = 6
-
-    print(deck)
-
-    gs = GameState(HanabiInstance(deck, num_p))
-    if puzzle:
-        gs.play(2)
-    else:
-        strat = GreedyStrategy(gs)
-        for _ in range(17):
-            strat.make_move()
-
-    solvable, sol = solve_sat(gs, 0)
-    if solvable:
-        print(sol)
-        print(link(sol))
-    else:
-        print('unsolvable')
-
-if __name__ == "__main__":
-    run_deck()

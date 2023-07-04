@@ -12,7 +12,7 @@ cur = conn.cursor()
 # populate_static_tables()
 
 
-class Game():
+class Game:
     def __init__(self, info=None):
         self.id = -1
         self.num_players = -1

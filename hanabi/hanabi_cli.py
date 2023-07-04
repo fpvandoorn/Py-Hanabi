@@ -4,10 +4,10 @@ import argparse
 
 import verboselogs
 
-from hanabi import logger
-from hanabi.live.check_game import check_game
-from hanabi.live.download_data import detailed_export_game
-from hanabi.live.compress import link
+from hanabi import logger, logger_manager
+from hanabi.live import check_game
+from hanabi.live import download_data
+from hanabi.live import compress
 
 """
 init db + populate tables
@@ -39,16 +39,16 @@ def add_analyze_subparser(subparsers):
 
 def analyze_game(game_id: int, download: bool = False):
     if download:
-        detailed_export_game(game_id)
+        download_data.detailed_export_game(game_id)
     logger.info('Analyzing game {}'.format(game_id))
-    turn, sol = check_game(game_id)
+    turn, sol = check_game.check_game(game_id)
     if turn == 0:
         logger.info('Instance is unfeasible')
     else:
         logger.info('Game was first lost after {} turns.'.format(turn))
         logger.info(
             'A replay achieving perfect score from the previous turn onwards is: {}#{}'
-            .format(link(sol), turn)
+            .format(compress.link(sol), turn)
         )
 
 
@@ -66,8 +66,7 @@ def main_parser() -> argparse.ArgumentParser:
 
     return parser
 
-
-if __name__ == "__main__":
+def hanabi_cli():
     args = main_parser().parse_args()
     switcher = {
         'analyze': analyze_game
@@ -78,3 +77,7 @@ if __name__ == "__main__":
     method_args.pop('command')
     method_args.pop('verbose')
     switcher[args.command](**method_args)
+
+
+if __name__ == "__main__":
+    hanabi_cli()

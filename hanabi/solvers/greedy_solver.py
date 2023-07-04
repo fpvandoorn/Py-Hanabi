@@ -1,13 +1,14 @@
 #! /bin/python3
 import collections
 import sys
+
 from enum import Enum
-from hanabi import logger
 from typing import Optional
 
-from hanabi.game import DeckCard, GameState, HanabiInstance
-from hanabi.live.compress import link, decompress_deck
-from hanabi.database.database import conn
+from hanabi import logger
+from hanabi import hanab_game
+from hanabi.live import compress
+from hanabi.database import database
 
 
 class CardType(Enum):
@@ -19,8 +20,8 @@ class CardType(Enum):
     UniqueVisible = 4
 
 
-class CardState():
-    def __init__(self, card_type: CardType, card: DeckCard, weight=1):
+class CardState:
+    def __init__(self, card_type: CardType, card: hanab_game.DeckCard, weight: Optional[int] = 1):
         self.card_type = card_type
         self.card = card
         self.weight = weight
@@ -66,7 +67,7 @@ class WeightedCard:
 
 
 class HandState:
-    def __init__(self, player: int, game_state: GameState):
+    def __init__(self, player: int, game_state: hanab_game.GameState):
         self.trash = []
         self.playable = []
         self.critical = []
@@ -111,14 +112,14 @@ class HandState:
         else:
             assert len(self.critical) > 0, "Programming error."
             self.best_discard = self.critical[-1]
-            self.discard_badness = 600 - 100*self.best_discard.card.rank
+            self.discard_badness = 600 - 100 * self.best_discard.card.rank
 
     def num_useful_cards(self):
         return len(self.dupes) + len(self.uniques) + len(self.playable) + len(self.critical)
 
 
 class CheatingStrategy:
-    def __init__(self, game_state: GameState):
+    def __init__(self, game_state: hanab_game.GameState):
         self.game_state = game_state
 
     def make_move(self):
@@ -135,10 +136,8 @@ class CheatingStrategy:
         exit(0)
 
 
-
-
 class GreedyStrategy():
-    def __init__(self, game_state: GameState):
+    def __init__(self, game_state: hanab_game.GameState):
         self.game_state = game_state
 
         self.earliest_draw_times = []
@@ -146,7 +145,7 @@ class GreedyStrategy():
             self.earliest_draw_times.append([])
             for r in range(1, 6):
                 self.earliest_draw_times[s].append(max(
-                    game_state.deck.index(DeckCard(s, r)) - game_state.hand_size * game_state.num_players + 1,
+                    game_state.deck.index(hanab_game.DeckCard(s, r)) - game_state.hand_size * game_state.num_players + 1,
                     0 if r == 1 else self.earliest_draw_times[s][r - 2]
                 ))
 
@@ -188,7 +187,7 @@ class GreedyStrategy():
                     copy_holders = set(self.game_state.holding_players(state.card))
                     copy_holders.remove(player)
                     connecting_holders = set(
-                        self.game_state.holding_players(DeckCard(state.card.suitIndex, state.card.rank + 1)))
+                        self.game_state.holding_players(hanab_game.DeckCard(state.card.suitIndex, state.card.rank + 1)))
 
                     if len(copy_holders) == 0:
                         # card is unique, imortancy is based lexicographically on whether somebody has the conn. card and the rank
@@ -244,8 +243,8 @@ class GreedyStrategy():
             self.game_state.clue()
 
 
-def run_deck(instance: HanabiInstance) -> GameState:
-    gs = GameState(instance)
+def run_deck(instance: hanab_game.HanabiInstance) -> hanab_game.GameState:
+    gs = hanab_game.GameState(instance)
     strat = CheatingStrategy(gs)
     while not gs.is_over():
         strat.make_move()
@@ -256,7 +255,7 @@ def run_samples(num_players, sample_size):
     logger.info("Running {} test games on {} players using greedy strategy.".format(sample_size, num_players))
     won = 0
     lost = 0
-    cur = conn.cursor()
+    cur = database.conn.cursor()
     cur.execute(
         "SELECT seed, num_players, deck, variant_id "
         "FROM seeds WHERE variant_id = 0 AND num_players = (%s)"
@@ -264,13 +263,13 @@ def run_samples(num_players, sample_size):
         (num_players, sample_size))
     for r in cur:
         seed, num_players, deck_str, var_id = r
-        deck = decompress_deck(deck_str)
-        instance = HanabiInstance(deck, num_players)
+        deck = compress.decompress_deck(deck_str)
+        instance = hanab_game.HanabiInstance(deck, num_players)
         final_game_state = run_deck(instance)
         if final_game_state.score != instance.max_score:
             logger.verbose(
                 "Greedy strategy lost {}-player seed {:10} {}:\n{}"
-                .format(num_players, seed, str(deck), link(final_game_state))
+                .format(num_players, seed, str(deck), compress.link(final_game_state))
             )
             lost += 1
         else:
@@ -279,9 +278,3 @@ def run_samples(num_players, sample_size):
     logger.info("Won {} ({}%) and lost {} ({}%) from sample of {} test games using greedy strategy.".format(
         won, round(100 * won / sample_size, 2), lost, round(100 * lost / sample_size, 2), sample_size
     ))
-
-
-if __name__ == "__main__":
-    for p in range(2, 6):
-        run_samples(p, int(sys.argv[1]))
-        print()
