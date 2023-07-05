@@ -87,7 +87,7 @@ class DBConnectionManager:
         logger.info("Initialised default config file {}".format(self.config_file))
 
     def connect(self):
-        conn = psycopg2.connect("dbname={} user={}".format(self.db_name, self.db_user, self.db_pass))
+        conn = psycopg2.connect("dbname={} user={} password={}".format(self.db_name, self.db_user, self.db_pass))
         cur = conn.cursor()
         self.lazy_conn.set_conn(conn)
         self.lazy_cur.set_cur(cur)
