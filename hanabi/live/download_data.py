@@ -41,16 +41,16 @@ class GameExportInvalidFormatError(GameExportError):
 
 class GameExportInvalidNumberOfPlayersError(GameExportInvalidFormatError):
     def __init__(self, game_id, expected, received):
-        super().__init__(game_id, "Received invalid list of players: Expected {}, got {}".format(expected, received))
-
-    pass
+        super().__init__(
+            game_id,
+            "Received invalid list of players: Expected {} many, got {}".format(expected, received)
+        )
 
 
 #
 def detailed_export_game(
           game_id: int
         , score: Optional[int] = None
-        , num_players: Optional[int] = None
         , var_id: Optional[int] = None
         , seed_exists: bool = False
 ) -> None:
@@ -59,10 +59,8 @@ def detailed_export_game(
     If seed is already present, it is left as is
     If game is already present, game details will be updated
 
-    :param game_id: Id of game to export
+    :param game_id: id of game to export
     :param score: If given, this will be inserted as score of the game. If not given, score is calculated
-    :param num_players: If given, the number of players reported by the site is checked against this. If inconsistent,
-        InvalidNumberOfPlayersError is raised
     :param var_id: If given, this will be inserted as variant id of the game. If not given, this is looked up
     :param seed_exists: If specified and true, assumes that the seed is already present in database.
         If this is not the case, call will raise a DB insertion error
@@ -84,8 +82,6 @@ def detailed_export_game(
         ))
 
     players = game_json.get('players', [])
-    if num_players is not None and len(players) != num_players:
-        raise GameExportInvalidNumberOfPlayersError(game_id, num_players, game_json.get('players', []))
     num_players = len(players)
     if num_players < 2:
         raise GameExportInvalidNumberOfPlayersError(game_id, "≥2", num_players)
@@ -174,13 +170,17 @@ def _process_game_row(game: Dict, var_id, export_all_games: bool = False):
     game_id = game.get('id', None)
     seed = game.get('seed', None)
     num_players = game.get('num_players', None)
+    users = game.get('users', "").split(", ")
     score = game.get('score', None)
 
     if any(v is None for v in [game_id, seed, num_players, score]):
         raise ValueError("Unknown response format on hanab.live")
 
+    if len(users) != num_players:
+        raise GameExportInvalidNumberOfPlayersError(game_id, num_players, users)
+
     if export_all_games:
-        detailed_export_game(game_id, score=score, num_players=num_players, var_id=var_id)
+        detailed_export_game(game_id, score=score, var_id=var_id)
         logger.debug("Imported game {}".format(game_id))
         return
 
@@ -197,7 +197,7 @@ def _process_game_row(game: Dict, var_id, export_all_games: bool = False):
         # Sometimes, seed is not present in the database yet, then we will have to query the full game details
         # (including the seed) to export it accordingly
         database.cur.execute("ROLLBACK TO seed_insert")
-        detailed_export_game(game_id, score=score, num_players=num_players, var_id=var_id)
+        detailed_export_game(game_id, score=score, var_id=var_id)
     database.cur.execute("RELEASE seed_insert")
     logger.debug("Imported game {}".format(game_id))
 

@@ -1,6 +1,5 @@
-#! /usr/bin/python3
-
 import argparse
+from typing import Optional
 
 import verboselogs
 
@@ -52,6 +51,14 @@ def subcommand_init(force: bool, populate: bool):
     logger.info("Successfully initialized database tables")
     if populate:
         init_database.populate_static_tables()
+        logger.info("Successfully populated tables with variants and suits from hanab.live")
+
+
+def subcommand_download(game_id: Optional[int], variant_id: Optional[int], export_all_games):
+    if game_id is not None:
+        download_data.detailed_export_game(game_id)
+    if variant_id is not None:
+        download_data.download_games(variant_id, export_all_games)
 
 
 def add_init_subparser(subparsers):
@@ -60,17 +67,20 @@ def add_init_subparser(subparsers):
         help='Init database tables, retrieve variant and suit information from hanab.live'
     )
     parser.add_argument('--force', '-f', help='Force initialization (Drops existing tables)', action='store_true')
-    parser.add_argument('--no-populate-tables', '-n',
-                        help='Do not download variant and suit information from hanab.live',
-                        action='store_true',
-                        dest='populate')
+    parser.add_argument(
+        '--no-populate-tables', '-n',
+        help='Do not download variant and suit information from hanab.live',
+        action='store_false',
+        dest='populate'
+    )
 
 
 def add_download_subparser(subparsers):
     parser = subparsers.add_parser('download', help='Download games from hanab.live')
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('--var', '-v', type=int)
-    group.add_argument('--id', '-i', type=int)
+    group.add_argument('--var', '--variant', '-v', type=int, dest='variant_id')
+    group.add_argument('--id', '-i', type=int, dest='game_id')
+    parser.add_argument('--all-games', '-a', action='store_true', dest='export_all_games')
 
 
 def add_analyze_subparser(subparsers):
@@ -98,7 +108,8 @@ def hanabi_cli():
     args = main_parser().parse_args()
     switcher = {
         'analyze': subcommand_analyze,
-        'init': subcommand_init
+        'init': subcommand_init,
+        'download': subcommand_download
     }
     if args.verbose:
         logger_manager.set_console_level(verboselogs.VERBOSE)
