@@ -50,10 +50,21 @@ pip install -r requirements.txt
 
 ### PostgreSQL
 You need to install PostgreSQL on your system, for installation instructions refer to your distribution.
-Create a new database and user, put the connection parameters in a config file (see below).
-This should be at your system default for the application `hanabi-suite`,
+Create a new database and user, for example:
+```
+$ sudo -iu postgres
+$ psql
+# CREATE DATABASE hanab-live;
+# \c hanab-live
+# CREATE USER hanabi WITH PASSWORD '1234';
+# GRANT ALL PRIVILEGES ON DATABASE hanab-live TO hanabi;
+# GRANT USAGE ON SCHEMA public TO hanabiuser;
+# GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO hanabi;
+# GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO hanabiuser;
+```
+Put the connection parameters in a config file (for the format, see `example_config.yaml`).
+This should be located at your system default for the application `hanabi-suite`,
 on POSIX systems this should be `~/.config/hanabi-suit/config.yaml`.
-For the format, see the example config file.
 
 
 ## Usage of stuff that already works:
