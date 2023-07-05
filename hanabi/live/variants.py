@@ -15,6 +15,14 @@ def variant_id(name) -> Optional[int]:
         return var_id[0]
 
 
+def get_all_variant_ids() -> List[int]:
+    cur.execute(
+        "SELECT id FROM variants "
+        "ORDER BY id"
+    )
+    return [var_id for (var_id,) in cur.fetchall()]
+
+
 def variant_name(var_id) -> Optional[int]:
     cur.execute(
         "SELECT name FROM variants WHERE id = %s",
