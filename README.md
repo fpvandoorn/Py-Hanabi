@@ -44,7 +44,7 @@ The hanabi folder is a working python package that you should be able to import 
 You will need to install the `requirements.txt` as usual, I recommend setting up a `venv`:
 ```
 python -m venv venv
-source venv/bin/active
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
