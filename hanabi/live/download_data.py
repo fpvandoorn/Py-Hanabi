@@ -2,15 +2,17 @@ import alive_progress
 from typing import Dict, Optional
 
 import psycopg2.errors
+import platformdirs
 
 from hanabi import hanab_game
+from hanabi import constants
+from hanabi import logger
 from hanabi.database import database
 from hanabi.live import site_api
 from hanabi.live import compress
 from hanabi.live import variants
 from hanabi.live import hanab_live
 
-from hanabi import logger
 
 
 class GameExportError(ValueError):
@@ -72,7 +74,7 @@ def detailed_export_game(
 
     game_json = site_api.get("export/{}".format(game_id))
     if game_json is None:
-        raise GameExportNoResponseFromSiteError
+        raise GameExportNoResponseFromSiteError(game_id)
     if type(game_json) != dict:
         raise GameExportInvalidResponseTypeError(game_id, type(game_json))
 
@@ -177,7 +179,14 @@ def _process_game_row(game: Dict, var_id, export_all_games: bool = False):
         raise ValueError("Unknown response format on hanab.live")
 
     if len(users) != num_players:
-        raise GameExportInvalidNumberOfPlayersError(game_id, num_players, users)
+        logger.error("Invalid number of players reported when processing row {}".format(game))
+        f = platformdirs.user_data_dir(constants.APP_NAME, ensure_exists=True) + '/invalid_game_ids.txt'
+        with open(f, "a+") as invalid_games_file:
+            invalid_games_file.writelines(
+                "{}, {}, {}\n".format(game_id, num_players, ", ".join(users))
+            )
+        return
+#        raise GameExportInvalidNumberOfPlayersError(game_id, num_players, users)
 
     if export_all_games:
         detailed_export_game(game_id, score=score, var_id=var_id)
