@@ -9,7 +9,7 @@ COLOR_INITIALS = 'rygbpt'
 PLAYER_NAMES = ["Alice", "Bob", "Cathy", "Donald", "Emily", "Frank"]
 
 # DB connection parameters
-DEFAULT_DB_NAME = 'hanabi-live'
+DEFAULT_DB_NAME = 'hanab-live'
 DEFAULT_DB_USER = 'hanabi'
 
 
