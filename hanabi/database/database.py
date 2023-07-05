@@ -1,79 +1,90 @@
 from typing import Optional
+from pathlib import Path
+import yaml
+
 import psycopg2
+import platformdirs
 
-# global connection
-conn = psycopg2.connect("dbname=hanab-live-2 user=postgres")
-
-# cursor
-cur = conn.cursor()
+from hanabi import constants
+from hanabi import logger
 
 
-# init_database_tables()
-# populate_static_tables()
+class LazyDBCursor:
+    def __init__(self):
+        self.__cur: Optional[psycopg2.cursor] = None
+
+    def __getattr__(self, item):
+        if self.__cur is None:
+            raise ValueError(
+                "DB cursor used in uninitialized state. Did you forget to initialize the DB connection?"
+            )
+        return getattr(self.__cur, item)
+
+    def set_cur(self, cur):
+        self.__cur = cur
 
 
-class Game:
-    def __init__(self, info=None):
-        self.id = -1
-        self.num_players = -1
-        self.score = -1
-        self.seed = ""
-        self.variant_id = -1
-        self.deck_plays = None
-        self.one_extra_card = None
-        self.one_less_card = None
-        self.all_or_nothing = None
-        self.num_turns = None
-        if type(info) == dict:
-            self.__dict__.update(info)
+class LazyDBConnection:
+    def __init__(self):
+        self.__conn: Optional[psycopg2.connection] = None
 
-    @staticmethod
-    def from_tuple(t):
-        g = Game()
-        g.id = t[0]
-        g.num_players = t[1]
-        g.score = t[2]
-        g.seed = t[3]
-        g.variant_id = t[4]
-        g.deck_plays = t[5]
-        g.one_extra_card = t[6]
-        g.one_less_card = t[7]
-        g.all_or_nothing = t[8]
-        g.num_turns = t[9]
-        return g
+    def __getattr__(self, item):
+        if self.__conn is None:
+            raise ValueError(
+                "DB connection used in uninitialized state. Did you forget to initialize the DB connection?"
+            )
+        return getattr(self.__conn, item)
 
-    def __eq__(self, other):
-        return self.__dict__ == other.__dict__
+    def set_conn(self, conn):
+        self.__conn = conn
 
 
-def load(game_id: int) -> Optional[Game]:
-    cur.execute("SELECT * from games WHERE id = {};".format(game_id))
-    a = cur.fetchone()
-    if a is None:
-        return None
-    else:
-        return Game.from_tuple(a)
+class DBConnectionManager:
+    def __init__(self):
+        self.lazy_conn: LazyDBConnection = LazyDBConnection()
+        self.lazy_cur: LazyDBCursor = LazyDBCursor()
+        self.config_file = Path(platformdirs.user_config_dir(constants.APP_NAME, ensure_exists=True)) / 'config.yaml'
+        self.db_name: str = constants.DEFAULT_DB_NAME
+        self.db_user: str = constants.DEFAULT_DB_USER
 
+    def read_config(self):
+        logger.debug("DB connection configuration read from {}".format(self.config_file))
+        if self.config_file.exists():
+            with open(self.config_file, "r") as f:
+                config = yaml.safe_load(f)
+            self.db_name = config.get('dbname', None)
+            self.db_user = config.get('dbuser', None)
+            if self.db_name is None:
+                logger.verbose("Falling back to default database name {}".format(constants.DEFAULT_DB_NAME))
+                self.db_name = constants.DEFAULT_DB_NAME
+            if self.db_user is None:
+                logger.verbose("Falling back to default database user {}".format(constants.DEFAULT_DB_USER))
+                self.db_user = constants.DEFAULT_DB_USER
+        else:
+            logger.info(
+                "No configuration file for database connection found, falling back to default values "
+                "(dbname={}, dbuser={}).".format(
+                    constants.DEFAULT_DB_NAME, constants.DEFAULT_DB_USER
+                )
+            )
+            logger.info(
+                "Note: To turn off this message, create a config file at {}".format(self.config_file)
+            )
 
-def store(game: Game):
-    stored = load(game.id)
-    if stored is None:
-        #        print("inserting game with id {} into DB".format(game.id))
-        cur.execute(
-            "INSERT INTO games"
-            "(id, num_players, score, seed, variant_id)"
-            "VALUES"
-            "(%s, %s, %s, %s, %s);",
-            (game.id, game.num_players, game.score, game.seed, game.variant_id)
+    def create_config_file(self):
+        if self.config_file.exists():
+            raise FileExistsError("Configuration file already exists, not overriding.")
+        self.config_file.write_text(
+            "dbname: {}\n"
+            "dbuser: {}".format(
+                constants.DEFAULT_DB_NAME,
+                constants.DEFAULT_DB_USER
+            )
         )
-        print("Inserted game with id {}".format(game.id))
-    else:
-        pass
-#        if not stored == game:
-#            print("Already stored game with id {}, aborting".format(game.id))
-#            print("Stored game is: {}".format(stored.__dict__))
-#            print("New game is:    {}".format(game.__dict__))
+        logger.info("Initialised default config file {}".format(self.config_file))
 
-
-def commit():
-    conn.commit()
+    def connect(self):
+        conn = psycopg2.connect("dbname={} user={}".format(self.db_name, self.db_user))
+        cur = conn.cursor()
+        self.lazy_conn.set_conn(conn)
+        self.lazy_cur.set_cur(cur)

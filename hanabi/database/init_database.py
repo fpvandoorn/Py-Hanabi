@@ -6,7 +6,7 @@ import platformdirs
 
 from hanabi import logger
 from hanabi import constants
-from .database import cur, conn
+from hanabi.database import cur, conn
 
 
 def get_existing_tables():

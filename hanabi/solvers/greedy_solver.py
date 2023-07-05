@@ -8,7 +8,7 @@ from typing import Optional
 from hanabi import logger
 from hanabi import hanab_game
 from hanabi.live import compress
-from hanabi.database import database
+from hanabi import database
 
 
 class CardType(Enum):

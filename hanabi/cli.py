@@ -9,6 +9,7 @@ from hanabi.live import check_game
 from hanabi.live import download_data
 from hanabi.live import compress
 from hanabi.database import init_database
+from hanabi.database import global_db_connection_manager
 
 """
 Commands supported:
@@ -76,6 +77,10 @@ def subcommand_download(
         logger.info("Successfully exported games for all variants")
 
 
+def subcommand_gen_config():
+    global_db_connection_manager.create_config_file()
+
+
 def add_init_subparser(subparsers):
     parser = subparsers.add_parser(
         'init',
@@ -120,6 +125,10 @@ def add_analyze_subparser(subparsers):
     parser.add_argument('--download', '-d', help='Download game if not in database', action='store_true')
 
 
+def add_config_gen_subparser(subparsers):
+    parser = subparsers.add_parser('gen-config', help='Generate config file at default location')
+
+
 def main_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog='hanabi_suite',
@@ -131,20 +140,27 @@ def main_parser() -> argparse.ArgumentParser:
     add_init_subparser(subparsers)
     add_analyze_subparser(subparsers)
     add_download_subparser(subparsers)
+    add_config_gen_subparser(subparsers)
 
     return parser
 
 
 def hanabi_cli():
     args = main_parser().parse_args()
-    switcher = {
+    subcommand_func = {
         'analyze': subcommand_analyze,
         'init': subcommand_init,
-        'download': subcommand_download
-    }
+        'download': subcommand_download,
+        'gen-config': subcommand_gen_config
+    }[args.command]
+
+    if args.command != 'gen-config':
+        global_db_connection_manager.read_config()
+        global_db_connection_manager.connect()
+
     if args.verbose:
         logger_manager.set_console_level(verboselogs.VERBOSE)
-    method_args = dict(vars(args))
-    method_args.pop('command')
-    method_args.pop('verbose')
-    switcher[args.command](**method_args)
+    del args.command
+    del args.verbose
+
+    subcommand_func(**vars(args))

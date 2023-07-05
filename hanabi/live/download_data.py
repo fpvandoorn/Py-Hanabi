@@ -7,7 +7,7 @@ import platformdirs
 from hanabi import hanab_game
 from hanabi import constants
 from hanabi import logger
-from hanabi.database import database
+from hanabi import database
 from hanabi.live import site_api
 from hanabi.live import compress
 from hanabi.live import variants

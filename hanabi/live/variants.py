@@ -2,43 +2,43 @@ import enum
 from typing import List, Optional
 from hanabi import hanab_game
 
-from hanabi.database.database import cur
+from hanabi import database
 
 
 def variant_id(name) -> Optional[int]:
-    cur.execute(
+    database.cur.execute(
         "SELECT id FROM variants WHERE name = %s",
         (name,)
     )
-    var_id = cur.fetchone()
+    var_id = database.cur.fetchone()
     if var_id is not None:
         return var_id[0]
 
 
 def get_all_variant_ids() -> List[int]:
-    cur.execute(
+    database.cur.execute(
         "SELECT id FROM variants "
         "ORDER BY id"
     )
-    return [var_id for (var_id,) in cur.fetchall()]
+    return [var_id for (var_id,) in database.cur.fetchall()]
 
 
 def variant_name(var_id) -> Optional[int]:
-    cur.execute(
+    database.cur.execute(
         "SELECT name FROM variants WHERE id = %s",
         (var_id,)
     )
-    name = cur.fetchone()
+    name = database.cur.fetchone()
     if name is not None:
         return name[0]
 
 
 def num_suits(var_id) -> Optional[int]:
-    cur.execute(
+    database.cur.execute(
         "SELECT num_suits FROM variants WHERE id = %s",
         (var_id,)
     )
-    num = cur.fetchone()
+    num = database.cur.fetchone()
     if num is not None:
         return num
 
@@ -90,19 +90,19 @@ class Suit:
 
     @staticmethod
     def from_db(suit_id):
-        cur.execute(
+        database.cur.execute(
             "SELECT name, display_name, abbreviation, rank_clues, color_clues, prism, dark, reversed "
             "FROM suits "
             "WHERE id = %s",
             (suit_id,)
         )
-        suit_properties = cur.fetchone()
+        suit_properties = database.cur.fetchone()
 
-        cur.execute(
+        database.cur.execute(
             "SELECT color_id FROM suit_colors WHERE suit_id = %s",
             (suit_id,)
         )
-        colors = list(map(lambda t: t[0], cur.fetchall()))
+        colors = list(map(lambda t: t[0], database.cur.fetchall()))
         return Suit(*suit_properties, colors)
 
 
@@ -232,7 +232,7 @@ class Variant:
 
     @staticmethod
     def from_db(var_id):
-        cur.execute(
+        database.cur.execute(
             "SELECT "
             "name, clue_starved, throw_it_in_a_hole, alternating_clues, synesthesia, chimneys, funnels, "
             "no_color_clues, no_rank_clues, empty_color_clues, empty_rank_clues, odds_and_evens, up_or_down,"
@@ -240,14 +240,14 @@ class Variant:
             "FROM variants WHERE id = %s",
             (var_id,)
         )
-        var_properties = cur.fetchone()
+        var_properties = database.cur.fetchone()
 
-        cur.execute(
+        database.cur.execute(
             "SELECT suit_id FROM variant_suits "
             "WHERE variant_id = %s "
             "ORDER BY index",
             (var_id,)
         )
-        var_suits = [Suit.from_db(*s) for s in cur.fetchall()]
+        var_suits = [Suit.from_db(*s) for s in database.cur.fetchall()]
 
         return Variant(*var_properties, var_suits)

@@ -1,7 +1,7 @@
 from hanabi.live import compress
 from enum import Enum
 
-from hanabi.database import database
+from hanabi import database
 from hanabi import hanab_game
 from hanabi.live import compress
 

@@ -9,7 +9,7 @@ import time
 
 from hanabi import logger
 from hanabi.solvers.sat import solve_sat
-from hanabi.database import database
+from hanabi import database
 from hanabi.live import download_data
 from hanabi.live import compress
 from hanabi import hanab_game
