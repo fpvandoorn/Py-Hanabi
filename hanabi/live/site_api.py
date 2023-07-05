@@ -8,7 +8,12 @@ from hanabi import logger
 from hanabi import constants
 
 # Cache all requests to site to reduce traffic and latency
-session = requests_cache.CachedSession(platformdirs.user_cache_dir(constants.APP_NAME) + '/hanab.live')
+session = requests_cache.CachedSession(
+    platformdirs.user_cache_dir(constants.APP_NAME) + '/hanab.live',
+    urls_expire_after={
+        'hanab.live/export/*': requests_cache.NEVER_EXPIRE
+    }
+)
 
 
 def get(url, refresh=False) -> Optional[Dict | str]:
