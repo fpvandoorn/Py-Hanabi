@@ -50,8 +50,20 @@ pip install -r requirements.txt
 
 ### PostgreSQL
 You need to install PostgreSQL on your system, for installation instructions refer to your distribution.
-Create a new database and user
+Create a new database and user, put the connection parameters in a config file (see below).
+This should be at your system default for the application `hanabi-suite`,
+on POSIX systems this should be `~/.config/hanabi-suit/config.yaml`.
+For the format, see the example config file.
 
 
 ## Usage of stuff that already works:
 Use the `hanabi_suite.py` CLI interface to download games and analyze them.
+An initial setup might look like this:
+
+```
+hanabi_cli.py gen-config                    // Generates configuration file for DB connection parameters and prints its location
+<Edit your configuration file>
+hanabi_cli.py init                          // Initializes database tables
+hanabi_cli.py download --var 0              // Donwloads information on all 'No Variant' games
+hanabi_cli.py analyze --download <game id>  // Downloads and analyzes game from hanab.live
+```
