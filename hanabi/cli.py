@@ -67,7 +67,7 @@ def subcommand_download(
 ):
     if game_id is not None:
         download_data.detailed_export_game(game_id)
-        logger.info("Successfully exported game ")
+        logger.info("Successfully exported game {}".format(game_id))
     if variant_id is not None:
         download_data.download_games(variant_id, export_all)
         logger.info("Successfully exported games for variant id {}".format(variant_id))

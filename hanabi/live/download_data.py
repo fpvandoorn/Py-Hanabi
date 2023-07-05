@@ -122,7 +122,6 @@ def detailed_export_game(
             ),
             starting_player
         )
-        print(game.instance.hand_size, game.instance.num_players)
         for action in actions:
             game.make_action(action)
         score = game.score

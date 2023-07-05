@@ -46,6 +46,7 @@ class DBConnectionManager:
         self.config_file = Path(platformdirs.user_config_dir(constants.APP_NAME, ensure_exists=True)) / 'config.yaml'
         self.db_name: str = constants.DEFAULT_DB_NAME
         self.db_user: str = constants.DEFAULT_DB_USER
+        self.db_pass: Optional[str] = None
 
     def read_config(self):
         logger.debug("DB connection configuration read from {}".format(self.config_file))
@@ -54,6 +55,7 @@ class DBConnectionManager:
                 config = yaml.safe_load(f)
             self.db_name = config.get('dbname', None)
             self.db_user = config.get('dbuser', None)
+            self.db_pass = config.get('dbpass', None)
             if self.db_name is None:
                 logger.verbose("Falling back to default database name {}".format(constants.DEFAULT_DB_NAME))
                 self.db_name = constants.DEFAULT_DB_NAME
@@ -76,7 +78,8 @@ class DBConnectionManager:
             raise FileExistsError("Configuration file already exists, not overriding.")
         self.config_file.write_text(
             "dbname: {}\n"
-            "dbuser: {}".format(
+            "dbuser: {}\n"
+            "dbpass: null".format(
                 constants.DEFAULT_DB_NAME,
                 constants.DEFAULT_DB_USER
             )
@@ -84,7 +87,7 @@ class DBConnectionManager:
         logger.info("Initialised default config file {}".format(self.config_file))
 
     def connect(self):
-        conn = psycopg2.connect("dbname={} user={}".format(self.db_name, self.db_user))
+        conn = psycopg2.connect("dbname={} user={}".format(self.db_name, self.db_user, self.db_pass))
         cur = conn.cursor()
         self.lazy_conn.set_conn(conn)
         self.lazy_cur.set_cur(cur)
