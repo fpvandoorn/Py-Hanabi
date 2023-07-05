@@ -1,10 +1,9 @@
 # Hanabi-Suite
 
-Disclaimer: This repository is still not in a good cleaned up code style, mainly due to me lacking time to clean stuff up properly
-Do not expect everything to work, do not expect everything to be well-documented
+Disclaimer: This repository is still not in a good cleaned up code style, mainly due to me lacking time to clean stuff up properly.
+Do not expect everything to work, do not expect everything to be well-documented.
 However, I try to improve this from now on so that eventually, reasonable interfaces will exist so that this becomes actually more usable than now
 
-Generally speaking, stuff that is already in a proper package/subfolder should be alright and I plan to keep it clean (also with a clean git history)
 
 ## What is this?
 
@@ -38,5 +37,21 @@ Apart from the obvious use-cases for some features, I want to explore boundaries
 - Analyse every seed on hanab.live for feasibility
 
 
+## Installation
+
+### Python
+The hanabi folder is a working python package that you should be able to import if it's in your python path.
+You will need to install the `requirements.txt` as usual, I recommend setting up a `venv`:
+```
+python -m venv venv
+source venv/bin/active
+pip install -r requirements.txt
+```
+
+### PostgreSQL
+You need to install PostgreSQL on your system, for installation instructions refer to your distribution.
+Create a new database and user
+
+
 ## Usage of stuff that already works:
-Use the `hanabi_suite.py` CLI interface to download games and analyze them
+Use the `hanabi_suite.py` CLI interface to download games and analyze them.
