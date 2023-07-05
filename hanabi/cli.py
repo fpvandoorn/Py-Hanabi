@@ -11,10 +11,13 @@ from hanabi.live import compress
 from hanabi.database import init_database
 
 """
+Commands supported:
+
 init db + populate tables
 download games of variant
 download single game
 analyze single game
+
 """
 
 
@@ -145,7 +148,3 @@ def hanabi_cli():
     method_args.pop('command')
     method_args.pop('verbose')
     switcher[args.command](**method_args)
-
-
-if __name__ == "__main__":
-    hanabi_cli()

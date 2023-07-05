@@ -4,7 +4,7 @@ from hanabi.live.download_data import download_games, detailed_export_game
 from hanabi.database.database import conn, cur
 from hanabi.database import init_database
 
-from hanabi.hanabi_cli import hanabi_cli
+from hanabi.cli import hanabi_cli
 
 def find_double_dark_games():
     cur.execute("SELECT variants.id, variants.name, count(suits.id) from variants "
