@@ -1,3 +1,7 @@
+Just some preliminary notes on how to implement a cheating bot
+Based on https://github.com/fpvandoorn/hanabi
+
+
 card types:
 trash, playable, useful (dispensable), critical
 
