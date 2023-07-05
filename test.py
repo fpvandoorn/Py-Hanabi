@@ -66,9 +66,9 @@ def export_all_seeds():
 
 
 if __name__ == "__main__":
-    init_database.init_database_tables()
-    init_database.populate_static_tables()
     hanabi_cli()
+    #    init_database.init_database_tables()
+#    init_database.populate_static_tables()
     exit(0)
     find_double_dark_games()
     exit(0)

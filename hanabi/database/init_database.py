@@ -9,6 +9,25 @@ from hanabi import constants
 from .database import cur, conn
 
 
+def get_existing_tables():
+    cur.execute(
+        "   SELECT tablename FROM pg_tables"
+        "   WHERE"
+        "       schemaname = 'public' AND "
+        "       tablename IN ("
+        "           'seeds',"
+        "           'games',"
+        "           'suits',"
+        "           'colors',"
+        "           'suit_colors',"
+        "           'variants',"
+        "           'variant_suits',"
+        "           'variant_game_downloads'"
+        "       )"
+    )
+    return [table for (table,) in cur.fetchall()]
+
+
 def init_database_tables():
     this = Path(__file__)
     logger.verbose("Initialising games and seeds tables...")
