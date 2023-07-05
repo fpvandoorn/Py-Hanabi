@@ -4,6 +4,7 @@ hanab.live
 venv/
 # pycache dir
 __pycache__
+test.py
 
 
 # a few output files
