@@ -1,4 +1,5 @@
 import json
+from typing import Optional, Dict
 
 import requests_cache
 import platformdirs
@@ -10,7 +11,7 @@ from hanabi import constants
 session = requests_cache.CachedSession(platformdirs.user_cache_dir(constants.APP_NAME) + '/hanab.live')
 
 
-def get(url, refresh=False):
+def get(url, refresh=False) -> Optional[Dict | str]:
     #    print("sending request for " + url)
     query = "https://hanab.live/" + url
     logger.debug("GET {} (force_refresh={})".format(query, refresh))
@@ -19,9 +20,11 @@ def get(url, refresh=False):
         logger.error("Failed to get request {} from hanab.live".format(query))
         return None
     if not response.status_code == 200:
+        logger.error("Request {} from hanab.live produced status code {}".format(query, response.status_code))
         return None
     if "application/json" in response.headers['content-type']:
         return json.loads(response.text)
+    return response.text
 
 
 def api(url, refresh=False):

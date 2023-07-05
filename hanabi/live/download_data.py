@@ -13,30 +13,84 @@ from hanabi.live import hanab_live
 from hanabi import logger
 
 
+class GameExportError(ValueError):
+    def __init__(self, game_id, msg):
+        super().__init__("When exporting game {}: {}".format(game_id, msg))
+    pass
+
+
+class GameExportNoResponseFromSiteError(GameExportError):
+    def __init__(self, game_id):
+        super().__init__(game_id, "No response from site")
+
+
+class GameExportInvalidResponseTypeError(GameExportError):
+    def __init__(self, game_id, response_type):
+        super().__init__(game_id, "Invalid response type (expected json, got {})".format(
+            response_type, game_id
+        ))
+    pass
+
+
+class GameExportInvalidFormatError(GameExportError):
+    def __init__(self, game_id, msg):
+        super().__init__("Invalid response format: {}".format(game_id), msg)
+
+
+class GameExportInvalidNumberOfPlayersError(GameExportInvalidFormatError):
+    def __init__(self, game_id, expected, received):
+        super().__init__(game_id, "Received invalid list of players: Expected {}, got {}".format(expected, received))
+    pass
+
+
 #
-def detailed_export_game(game_id: int, score: Optional[int] = None, var_id: Optional[int] = None,
-                         seed_exists: bool = False) -> None:
+def detailed_export_game(
+        game_id: int,
+        score: Optional[int] = None,
+        num_players: Optional[int] = None,
+        var_id: Optional[int] = None,
+        seed_exists: bool = False
+    ) -> None:
     """
-    Downloads full details of game, inserts seed and game into DB
+    Downloads full details of game from hanab.live, inserts seed and game into DB
     If seed is already present, it is left as is
     If game is already present, game details will be updated
 
-    :param game_id:
+    :param game_id: Id of game to export
     :param score: If given, this will be inserted as score of the game. If not given, score is calculated
-    :param var_id If given, this will be inserted as variant id of the game. If not given, this is looked up
+    :param num_players: If given, the number of players reported by the site is checked against this. If inconsistent,
+        InvalidNumberOfPlayersError is raised
+    :param var_id: If given, this will be inserted as variant id of the game. If not given, this is looked up
     :param seed_exists: If specified and true, assumes that the seed is already present in database.
         If this is not the case, call will raise a DB insertion error
+
+    :raises GameExportError and its child classes
     """
+
     logger.debug("Importing game {}".format(game_id))
 
-    assert_msg = "Invalid response format from hanab.live while exporting game id {}".format(game_id)
-
     game_json = site_api.get("export/{}".format(game_id))
-    assert game_json.get('id') == game_id, assert_msg
+    if game_json is None:
+        raise GameExportNoResponseFromSiteError
+    if type(game_json) != dict:
+        raise GameExportInvalidResponseTypeError(game_id, type(game_json))
+
+    if game_json.get('id', None) != game_id:
+        raise GameExportInvalidFormatError(game_id, "Unexpected game_id {} received, expected {}".format(
+            game_json.get('id'), game_id
+        ))
 
     players = game_json.get('players', [])
+    if num_players is not None and len(players) != num_players:
+        raise GameExportInvalidNumberOfPlayersError(game_id, num_players, game_json.get('players', []))
     num_players = len(players)
+    if num_players < 2:
+        raise GameExportInvalidNumberOfPlayersError(game_id, "≥2", num_players)
+
     seed = game_json.get('seed', None)
+    if type(seed) != str:
+        raise GameExportInvalidFormatError(game_id, "Unexpected seed, expected string, got {}".format(seed))
+
     options = game_json.get('options', {})
     var_id = var_id or variants.variant_id(options.get('variant', 'No Variant'))
     deck_plays = options.get('deckPlays', False)
@@ -44,11 +98,16 @@ def detailed_export_game(game_id: int, score: Optional[int] = None, var_id: Opti
     one_less_card = options.get('oneLessCard', False)
     all_or_nothing = options.get('allOrNothing', False)
     starting_player = options.get('startingPlayer', 0)
-    actions = [hanab_game.Action.from_json(action) for action in game_json.get('actions', [])]
-    deck = [hanab_game.DeckCard.from_json(card) for card in game_json.get('deck', None)]
 
-    assert players != [], assert_msg
-    assert seed is not None, assert_msg
+    try:
+        actions = [hanab_game.Action.from_json(action) for action in game_json.get('actions', [])]
+    except hanab_game.ParseError as e:
+        raise GameExportInvalidFormatError(game_id, "Failed to parse actions") from e
+
+    try:
+        deck = [hanab_game.DeckCard.from_json(card) for card in game_json.get('deck', None)]
+    except hanab_game.ParseError as e:
+        raise GameExportInvalidFormatError(game_id, "Failed to parse deck") from e
 
     if score is None:
         # need to play through the game once to find out its score
@@ -69,14 +128,15 @@ def detailed_export_game(game_id: int, score: Optional[int] = None, var_id: Opti
 
     try:
         compressed_deck = compress.compress_deck(deck)
-    except compress.InvalidFormatError:
+    except compress.InvalidFormatError as e:
         logger.error("Failed to compress deck while exporting game {}: {}".format(game_id, deck))
-        raise
+        raise GameExportInvalidFormatError(game_id, "Failed to compress deck") from e
+
     try:
         compressed_actions = compress.compress_actions(actions)
-    except compress.InvalidFormatError:
+    except compress.InvalidFormatError as e:
         logger.error("Failed to compress actions while exporting game {}".format(game_id))
-        raise
+        raise GameExportInvalidFormatError(game_id, "Failed to compress actions") from e
 
     if not seed_exists:
         database.cur.execute(
@@ -107,7 +167,7 @@ def detailed_export_game(game_id: int, score: Optional[int] = None, var_id: Opti
     logger.debug("Imported game {}".format(game_id))
 
 
-def process_game_row(game: Dict, var_id):
+def process_game_row(game: Dict, var_id, export_all_games: bool = False):
     game_id = game.get('id', None)
     seed = game.get('seed', None)
     num_players = game.get('num_players', None)
@@ -115,6 +175,11 @@ def process_game_row(game: Dict, var_id):
 
     if any(v is None for v in [game_id, seed, num_players, score]):
         raise ValueError("Unknown response format on hanab.live")
+
+    if export_all_games:
+        detailed_export_game(game_id, score=score, num_players=num_players, var_id=var_id)
+        logger.debug("Imported game {}".format(game_id))
+        return
 
     database.cur.execute("SAVEPOINT seed_insert")
     try:
@@ -126,13 +191,15 @@ def process_game_row(game: Dict, var_id):
             (game_id, seed, num_players, score, var_id)
         )
     except psycopg2.errors.ForeignKeyViolation:
+        # Sometimes, seed is not present in the database yet, then we will have to query the full game details
+        # (including the seed) to export it accordingly
         database.cur.execute("ROLLBACK TO seed_insert")
         detailed_export_game(game_id, score, var_id)
     database.cur.execute("RELEASE seed_insert")
     logger.debug("Imported game {}".format(game_id))
 
 
-def download_games(var_id):
+def download_games(var_id, export_all_games: bool = False):
     name = variants.variant_name(var_id)
     page_size = 100
     if name is None:
@@ -179,7 +246,7 @@ def download_games(var_id):
             if not (page == last_page or len(rows) == page_size):
                 logger.warn('WARN: received unexpected row count ({}) on page {}'.format(len(rows), page))
             for row in rows:
-                process_game_row(row, var_id)
+                process_game_row(row, var_id, export_all_games)
                 bar()
             database.cur.execute(
                 "INSERT INTO variant_game_downloads (variant_id, last_game_id) VALUES"

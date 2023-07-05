@@ -5,6 +5,10 @@ from termcolor import colored
 from hanabi import constants
 
 
+class ParseError(ValueError):
+    pass
+
+
 class DeckCard:
     def __init__(self, suitIndex: int, rank: int, deck_index=None):
         self.suitIndex: int = suitIndex
@@ -13,7 +17,13 @@ class DeckCard:
 
     @staticmethod
     def from_json(deck_card):
-        return DeckCard(**deck_card)
+        suit_index = deck_card.get('suitIndex', None)
+        rank = deck_card.get('rank', None)
+        if suit_index is None:
+            raise ParseError("No suit index specified in deck_card")
+        if rank is None:
+            raise ParseError("No rank specified in deck_card")
+        return DeckCard(suit_index, rank)
 
     def colorize(self):
         color = ["green", "blue", "magenta", "yellow", "white", "cyan"][self.suitIndex]
@@ -54,10 +64,24 @@ class Action:
 
     @staticmethod
     def from_json(action):
+        action_type_int = action.get('type', None)
+        action_target = action.get('target', None)
+        action_value = action.get('value', None)
+        if action_type_int is None:
+            raise ParseError("No action type specified in action, found {}".format(action_type))
+        if action_target is None:
+            raise ParseError("No action target specified in action, found {}".format(action_target))
+        for val in [action_type_int, action_target, action_value]:
+            if val is not None and type(val) != int:
+                raise ParseError("Invalid data type in action, expected int, found {}".format(type(val)))
+        try:
+            action_type = ActionType(action_type_int)
+        except ValueError as e:
+            raise ParseError("Invalid action type, found {}".format(action_type_int)) from e
         return Action(
-            ActionType(action['type']),
-            int(action['target']),
-            action.get('value', None)
+            action_type,
+            action_target,
+            action_value
         )
 
     def __repr__(self):
