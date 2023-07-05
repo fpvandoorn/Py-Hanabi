@@ -16,6 +16,7 @@ from hanabi import logger
 class GameExportError(ValueError):
     def __init__(self, game_id, msg):
         super().__init__("When exporting game {}: {}".format(game_id, msg))
+
     pass
 
 
@@ -29,28 +30,30 @@ class GameExportInvalidResponseTypeError(GameExportError):
         super().__init__(game_id, "Invalid response type (expected json, got {})".format(
             response_type, game_id
         ))
+
     pass
 
 
 class GameExportInvalidFormatError(GameExportError):
     def __init__(self, game_id, msg):
-        super().__init__("Invalid response format: {}".format(game_id), msg)
+        super().__init__(game_id, "Invalid response format: {}".format(msg))
 
 
 class GameExportInvalidNumberOfPlayersError(GameExportInvalidFormatError):
     def __init__(self, game_id, expected, received):
         super().__init__(game_id, "Received invalid list of players: Expected {}, got {}".format(expected, received))
+
     pass
 
 
 #
 def detailed_export_game(
-        game_id: int,
-        score: Optional[int] = None,
-        num_players: Optional[int] = None,
-        var_id: Optional[int] = None,
-        seed_exists: bool = False
-    ) -> None:
+          game_id: int
+        , score: Optional[int] = None
+        , num_players: Optional[int] = None
+        , var_id: Optional[int] = None
+        , seed_exists: bool = False
+) -> None:
     """
     Downloads full details of game from hanab.live, inserts seed and game into DB
     If seed is already present, it is left as is
@@ -167,7 +170,7 @@ def detailed_export_game(
     logger.debug("Imported game {}".format(game_id))
 
 
-def process_game_row(game: Dict, var_id, export_all_games: bool = False):
+def _process_game_row(game: Dict, var_id, export_all_games: bool = False):
     game_id = game.get('id', None)
     seed = game.get('seed', None)
     num_players = game.get('num_players', None)
@@ -194,7 +197,7 @@ def process_game_row(game: Dict, var_id, export_all_games: bool = False):
         # Sometimes, seed is not present in the database yet, then we will have to query the full game details
         # (including the seed) to export it accordingly
         database.cur.execute("ROLLBACK TO seed_insert")
-        detailed_export_game(game_id, score, var_id)
+        detailed_export_game(game_id, score=score, num_players=num_players, var_id=var_id)
     database.cur.execute("RELEASE seed_insert")
     logger.debug("Imported game {}".format(game_id))
 
@@ -246,7 +249,7 @@ def download_games(var_id, export_all_games: bool = False):
             if not (page == last_page or len(rows) == page_size):
                 logger.warn('WARN: received unexpected row count ({}) on page {}'.format(len(rows), page))
             for row in rows:
-                process_game_row(row, var_id, export_all_games)
+                _process_game_row(row, var_id, export_all_games)
                 bar()
             database.cur.execute(
                 "INSERT INTO variant_game_downloads (variant_id, last_game_id) VALUES"
