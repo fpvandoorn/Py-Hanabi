@@ -202,7 +202,6 @@ def _download_json_files():
             data[name] = json.loads(file.read_text())
             continue
         url = base_url + "/" + file.name
-        print("foo")
         response = requests.get(url)
         if not response.status_code == 200:
             err_msg = "Could not download initialization file {} from github (tried url {})".format(filename, url)
