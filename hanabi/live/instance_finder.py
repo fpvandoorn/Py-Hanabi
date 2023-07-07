@@ -20,64 +20,49 @@ from hanabi.live import variants
 MAX_PROCESSES = 6
 
 
-def update_seeds_db():
-    cur2 = database.conn.cursor()
-    with database.conn.cursor() as cur:
-        cur.execute("SELECT num_players, seed, variant_id from games;")
-        for (num_players, seed, variant_id) in cur:
-            cur2.execute("SELECT COUNT(*) from seeds WHERE seed = (%s);", (seed,))
-            if cur2.fetchone()[0] == 0:
-                print("new seed {}".format(seed))
-                cur2.execute("INSERT INTO seeds"
-                             "(seed, num_players, variant_id)"
-                             "VALUES"
-                             "(%s, %s, %s)",
-                             (seed, num_players, variant_id)
-                             )
-                database.conn.commit()
-            else:
-                print("seed {} already found in DB".format(seed))
-
-
-def get_decks_of_seeds():
-    cur2 = database.conn.cursor()
-    database.cur.execute("SELECT seed, variant_id FROM seeds WHERE deck is NULL")
-    for (seed, variant_id) in database.cur:
-        cur2.execute("SELECT id FROM games WHERE seed = (%s) LIMIT 1", (seed,))
-        (game_id,) = cur2.fetchone()
-        logger.verbose("Exporting game {} for seed {}.".format(game_id, seed))
-        download_data.detailed_export_game(game_id, var_id=variant_id, seed_exists=True)
-        database.conn.commit()
-
-
 def update_trivially_feasible_games(variant_id):
     variant: variants.Variant = variants.Variant.from_db(variant_id)
     database.cur.execute("SELECT seed FROM seeds WHERE variant_id = (%s) AND feasible is null", (variant_id,))
     seeds = database.cur.fetchall()
-    print('Checking variant {} (id {}), found {} seeds to check...'.format(variant.name, variant_id, len(seeds)))
+    logger.info('Checking variant {} (id {}), found {} seeds to check...'.format(variant.name, variant_id, len(seeds)))
 
     with alive_progress.alive_bar(total=len(seeds), title='{} ({})'.format(variant.name, variant_id)) as bar:
         for (seed,) in seeds:
-            database.cur.execute("SELECT id, deck_plays, one_extra_card, one_less_card, all_or_nothing "
-                        "FROM games WHERE score = (%s) AND seed = (%s) ORDER BY id;",
-                        (variant.max_score, seed)
-                        )
+            database.cur.execute(
+                "SELECT id, deck_plays, one_extra_card, one_less_card, all_or_nothing, detrimental_characters "
+                "FROM games WHERE score = (%s) AND seed = (%s) ORDER BY id;",
+                (variant.max_score, seed)
+            )
             res = database.cur.fetchall()
             logger.debug("Checking seed {}: {:3} results".format(seed, len(res)))
-            for (game_id, a, b, c, d) in res:
-                if None in [a, b, c, d]:
+            for (game_id, a, b, c, d, e) in res:
+                if None in [a, b, c, d, e]:
                     logger.debug('  Game {} not found in database, exporting...'.format(game_id))
-                    download_data.detailed_export_game(game_id, var_id=variant_id)
+                    download_data.detailed_export_game(
+                        game_id, var_id=variant_id, score=variant.max_score, seed_exists=True
+                    )
+                    database.cur.execute("SELECT deck_plays, one_extra_card, one_less_card, all_or_nothing, "
+                                         "detrimental_characters "
+                                         "FROM games WHERE id = (%s)",
+                                         (game_id,))
+                    (a, b, c, d, e) = database.cur.fetchone()
                 else:
-                    logger.debug('  Game {} already in database'.format(game_id, valid))
-                valid = not any([a, b, c, d])
+                    logger.debug('  Game {} already in database'.format(game_id))
+                valid = not any([a, b, c, d, e])
                 if valid:
-                    logger.verbose('Seed {:10} (variant {}) found to be feasible via game {:6}'.format(seed, variant_id, game_id))
-                    database.cur.execute("UPDATE seeds SET feasible = (%s) WHERE seed = (%s)", (True, seed))
+                    print(a, b, c, d, e)
+                    logger.verbose(
+                        'Seed {:10} (variant {}) found to be feasible via game {:6}'.format(seed, variant_id, game_id))
+                    database.cur.execute("UPDATE seeds SET (feasible, max_score_theoretical) = (%s, %s) WHERE seed = "
+                                         "(%s)", (True, variant.max_score, seed))
+                    database.cur.execute(
+                        "INSERT INTO feasibility_certs (seed, game_id) VALUES (%s, %s)",
+                        (seed, game_id)
+                    )
                     database.conn.commit()
                     break
                 else:
-                    logger.verbose('  Cheaty game found')
+                    logger.verbose('  Cheaty game {} found'.format(game_id))
             bar()
 
 
