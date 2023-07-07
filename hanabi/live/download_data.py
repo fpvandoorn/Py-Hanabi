@@ -268,15 +268,10 @@ def download_games(var_id, export_all_games: bool = False):
     if num_already_downloaded_games == num_entries:
         logger.info("Already downloaded all games ({:6} many) for variant {:4} [{}]".format(num_entries, var_id, name))
         return
-    logger.info(
-        "Downloading remaining {} (total {}) entries for variant {} [{}]".format(
-            num_entries - num_already_downloaded_games, num_entries, var_id, name
-        )
-    )
 
     with alive_progress.alive_bar(
             total=num_entries - num_already_downloaded_games,
-            title='Downloading games for variant id {} [{}]'.format(var_id, name),
+            title='Downloading remaining games for variant id {:4} [{}]'.format(var_id, name),
             enrich_print=False
     ) as bar:
         for page in range(next_page, last_page + 1):
