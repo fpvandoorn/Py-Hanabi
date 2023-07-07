@@ -140,19 +140,19 @@ def detailed_export_game(
 
     if not seed_exists:
         database.cur.execute(
-            "INSERT INTO seeds (seed, num_players, variant_id, deck)"
-            "VALUES (%s, %s, %s, %s)"
+            "INSERT INTO seeds (seed, num_players, starting_player, variant_id, deck)"
+            "VALUES (%s, %s, %s, %s, %s)"
             "ON CONFLICT (seed) DO NOTHING",
-            (seed, num_players, var_id, compressed_deck)
+            (seed, num_players, starting_player, var_id, compressed_deck)
         )
         logger.debug("New seed {} imported.".format(seed))
 
     database.cur.execute(
         "INSERT INTO games ("
-        "id, num_players, starting_player, score, seed, variant_id, deck_plays, one_extra_card, one_less_card,"
+        "id, num_players, score, seed, variant_id, deck_plays, one_extra_card, one_less_card,"
         "all_or_nothing, actions"
         ")"
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
         "ON CONFLICT (id) DO UPDATE SET ("
         "deck_plays, one_extra_card, one_less_card, all_or_nothing, actions"
         ") = ("
@@ -160,7 +160,7 @@ def detailed_export_game(
         "EXCLUDED.actions"
         ")",
         (
-            game_id, num_players, starting_player, score, seed, var_id, deck_plays, one_extra_card, one_less_card,
+            game_id, num_players, score, seed, var_id, deck_plays, one_extra_card, one_less_card,
             all_or_nothing, compressed_actions
         )
     )

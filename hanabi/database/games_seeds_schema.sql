@@ -4,6 +4,7 @@ CREATE TABLE seeds (
     num_players             SMALLINT    NOT NULL,
     variant_id              SMALLINT    NOT NULL,
     deck                    VARCHAR(62) NOT NULL,
+    starting_player         SMALLINT    NOT NULL DEFAULT 0,
     feasible                BOOLEAN     DEFAULT NULL,
     max_score_theoretical   SMALLINT
 );
@@ -15,7 +16,6 @@ CREATE TABLE games (
     id              INT      PRIMARY KEY,
     seed            TEXT     NOT NULL REFERENCES seeds,
     num_players     SMALLINT NOT NULL,
-    starting_player SMALLINT NOT NULL DEFAULT 0,
     score           SMALLINT NOT NULL,
     variant_id      SMALLINT NOT NULL,
     deck_plays      BOOLEAN,
