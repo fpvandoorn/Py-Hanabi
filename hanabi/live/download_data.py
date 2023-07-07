@@ -250,19 +250,31 @@ def download_games(var_id, export_all_games: bool = False):
             enrich_print=False
     ) as bar:
         for page in range(next_page, last_page + 1):
-            r = site_api.api(url + "?col[0]=0&page={}".format(page), refresh=page == last_page)
-            rows = r.get('rows', [])
-            if page == next_page:
-                rows = rows[num_already_downloaded_games % 100:]
-            if not (page == last_page or len(rows) == page_size):
-                logger.warn('WARN: received unexpected row count ({}) on page {}'.format(len(rows), page))
-            for row in rows:
-                _process_game_row(row, var_id, export_all_games)
-                bar()
-            database.cur.execute(
-                "INSERT INTO variant_game_downloads (variant_id, last_game_id) VALUES"
-                "(%s, %s)"
-                "ON CONFLICT (variant_id) DO UPDATE SET last_game_id = EXCLUDED.last_game_id",
-                (var_id, r['rows'][-1]['id'])
-            )
-            database.conn.commit()
+            for refresh in [False, True]:
+                r = site_api.api(url + "?col[0]=0&page={}".format(page), refresh=(page == last_page) or refresh)
+                rows = r.get('rows', [])
+                if page == next_page:
+                    rows = rows[num_already_downloaded_games % 100:]
+                if not (page == last_page or len(rows) == page_size):
+                    if not refresh:
+                        # row count does not match, maybe this is due to an old cached version of the api query,
+                        # try again with a forced refresh of the query
+                        logger.verbose("refreshing page {} due to unexpected row count".format(page))
+                        continue
+                    # If refreshing did not fix the error, log a warning
+                    logger.warn('WARN: received unexpected row count ({}, expected {}) on page {}'.format(
+                        len(rows), page_size, page)
+                    )
+                for row in rows:
+                    _process_game_row(row, var_id, export_all_games)
+                    bar()
+                database.cur.execute(
+                    "INSERT INTO variant_game_downloads (variant_id, last_game_id) VALUES"
+                    "(%s, %s)"
+                    "ON CONFLICT (variant_id) DO UPDATE SET last_game_id = EXCLUDED.last_game_id",
+                    (var_id, r['rows'][-1]['id'])
+                )
+                database.conn.commit()
+                # we need this so that we don't execute the iteration with forced refresh
+                # if stuff already checked out without refreshing
+                break
