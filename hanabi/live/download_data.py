@@ -99,6 +99,7 @@ def detailed_export_game(
     one_less_card = options.get('oneLessCard', False)
     all_or_nothing = options.get('allOrNothing', False)
     starting_player = options.get('startingPlayer', 0)
+    detrimental_characters = options.get('detrimentalCharacters', False)
 
     try:
         actions = [hanab_game.Action.from_json(action) for action in game_json.get('actions', [])]
@@ -112,6 +113,10 @@ def detailed_export_game(
 
     if score is None:
         # need to play through the game once to find out its score
+        if detrimental_characters:
+            raise NotImplementedError(
+                "detrimental characters not supported, cannot determine score of game {}".format(game_id)
+            )
         game = hanab_live.HanabLiveGameState(
             hanab_live.HanabLiveInstance(
                 deck, num_players, var_id,
@@ -261,7 +266,7 @@ def download_games(var_id, export_all_games: bool = False):
     last_page = (num_entries - 1) // page_size
 
     if num_already_downloaded_games == num_entries:
-        logger.info("Already downloaded all games ({} many) for variant {} [{}]".format(num_entries, var_id, name))
+        logger.info("Already downloaded all games ({:6} many) for variant {:4} [{}]".format(num_entries, var_id, name))
         return
     logger.info(
         "Downloading remaining {} (total {}) entries for variant {} [{}]".format(
