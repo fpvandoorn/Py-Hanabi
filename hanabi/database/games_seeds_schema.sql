@@ -13,18 +13,35 @@ CREATE INDEX seeds_variant_idx ON seeds (variant_id);
 
 DROP TABLE IF EXISTS games CASCADE;
 CREATE TABLE games (
-    id              INT      PRIMARY KEY,
-    seed            TEXT     NOT NULL REFERENCES seeds,
-    num_players     SMALLINT NOT NULL,
-    score           SMALLINT NOT NULL,
-    variant_id      SMALLINT NOT NULL,
-    deck_plays      BOOLEAN,
-    one_extra_card  BOOLEAN,
-    one_less_card   BOOLEAN,
-    all_or_nothing  BOOLEAN,
-    num_turns       SMALLINT,
-    actions         TEXT
+    id                      INT      PRIMARY KEY,
+    seed                    TEXT     NOT NULL REFERENCES seeds,
+    num_players             SMALLINT NOT NULL,
+    score                   SMALLINT NOT NULL,
+    variant_id              SMALLINT NOT NULL,
+    deck_plays              BOOLEAN,
+    one_extra_card          BOOLEAN,
+    one_less_card           BOOLEAN,
+    all_or_nothing          BOOLEAN,
+    detrimental_characters  BOOLEAN,
+    num_turns               SMALLINT,
+    actions                 TEXT
 );
 CREATE INDEX games_seed_score_idx ON games (seed, score);
 CREATE INDEX games_var_seed_idx ON games (variant_id, seed);
 CREATE INDEX games_player_idx ON games (num_players);
+
+
+DROP TABLE IF EXISTS infeasibility_certs;
+CREATE TABLE infeasibility_certs (
+    seed              TEXT     NOT NULL REFERENCES seeds ON DELETE CASCADE,
+    score_upper_bound SMALLINT NOT NULL,
+    reason            SMALLINT NOT NULL
+);
+
+DROP TABLE IF EXISTS feasibility_certs;
+CREATE TABLE feasibility_certs (
+  seed    TEXT NOT NULL REFERENCES seeds ON DELETE CASCADE,
+  game_id INT REFERENCES games ON DELETE CASCADE,
+  actions TEXT,
+  CHECK (num_nonnulls(game_id, actions) = 1)
+);

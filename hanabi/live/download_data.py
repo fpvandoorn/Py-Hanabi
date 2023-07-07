@@ -155,18 +155,18 @@ def detailed_export_game(
     database.cur.execute(
         "INSERT INTO games ("
         "id, num_players, score, seed, variant_id, deck_plays, one_extra_card, one_less_card,"
-        "all_or_nothing, actions"
+        "all_or_nothing, detrimental_characters, actions"
         ")"
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
         "ON CONFLICT (id) DO UPDATE SET ("
-        "deck_plays, one_extra_card, one_less_card, all_or_nothing, actions"
+        "deck_plays, one_extra_card, one_less_card, all_or_nothing, actions, detrimental_characters"
         ") = ("
         "EXCLUDED.deck_plays, EXCLUDED.one_extra_card, EXCLUDED.one_less_card, EXCLUDED.all_or_nothing,"
-        "EXCLUDED.actions"
+        "EXCLUDED.actions, EXCLUDED.detrimental_characters"
         ")",
         (
             game_id, num_players, score, seed, var_id, deck_plays, one_extra_card, one_less_card,
-            all_or_nothing, compressed_actions
+            all_or_nothing, detrimental_characters, compressed_actions
         )
     )
     logger.debug("Imported game {}".format(game_id))
