@@ -22,10 +22,10 @@ def get(url, refresh=False) -> Optional[Dict | str]:
     logger.debug("GET {} (force_refresh={})".format(query, refresh))
     response = session.get(query, force_refresh=refresh)
     if not response:
-        logger.error("Failed to get request {} from hanab.live".format(query))
+        logger.debug("Failed to get request {} from hanab.live".format(query))
         return None
     if not response.status_code == 200:
-        logger.error("Request {} from hanab.live produced status code {}".format(query, response.status_code))
+        logger.debug("Request {} from hanab.live produced status code {}".format(query, response.status_code))
         return None
     if "application/json" in response.headers['content-type']:
         return json.loads(response.text)
