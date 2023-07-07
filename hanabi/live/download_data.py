@@ -118,9 +118,9 @@ def detailed_export_game(
                 deck_plays=deck_plays,
                 one_less_card=one_less_card,
                 one_extra_card=one_extra_card,
-                all_or_nothing=all_or_nothing
-            ),
-            starting_player
+                all_or_nothing=all_or_nothing,
+                starting_player=starting_player
+            )
         )
         for action in actions:
             game.make_action(action)

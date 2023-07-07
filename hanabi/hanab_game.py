@@ -116,7 +116,8 @@ class HanabiInstance:
             clue_starved: bool = False,  # if true, discarding and playing fives only gives back half a clue
             fives_give_clue: bool = True,  # if false, then playing a five will not change the clue count
             deck_plays: bool = False,
-            all_or_nothing: bool = False
+            all_or_nothing: bool = False,
+            starting_player: int = 0  # defines index of player that starts the game
     ):
         # defining properties
         self.deck = deck
@@ -128,6 +129,7 @@ class HanabiInstance:
         self.deck_plays = deck_plays,
         self.all_or_nothing = all_or_nothing
         assert not self.all_or_nothing, "All or nothing not implemented"
+        self.starting_player = starting_player
 
         # normalize deck indices
         for (idx, card) in enumerate(self.deck):
@@ -170,7 +172,7 @@ class HanabiInstance:
 
 
 class GameState:
-    def __init__(self, instance: HanabiInstance, starting_player: int = 0):
+    def __init__(self, instance: HanabiInstance):
         # will not be modified
         self.instance = instance
 
@@ -181,7 +183,7 @@ class GameState:
         self.stacks = [0 for i in range(0, self.instance.num_suits)]
         self.strikes = 0
         self.clues = 8
-        self.turn = starting_player
+        self.turn = self.instance.starting_player
         self.pace = self.instance.initial_pace
         self.remaining_extra_turns = self.instance.num_players + 1
         self.trash = []

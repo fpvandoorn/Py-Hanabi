@@ -19,7 +19,7 @@ from hanabi.solvers import sat
 def check_game(game_id: int) -> Tuple[int, hanab_game.GameState]:
     logger.debug("Analysing game {}".format(game_id))
     with database.conn.cursor() as cur:
-        cur.execute("SELECT games.num_players, deck, actions, score, games.variant_id FROM games "
+        cur.execute("SELECT games.num_players, deck, actions, score, games.variant_id, starting_player FROM games "
                     "INNER JOIN seeds ON seeds.seed = games.seed "
                     "WHERE games.id = (%s)",
                     (game_id,)
@@ -27,11 +27,16 @@ def check_game(game_id: int) -> Tuple[int, hanab_game.GameState]:
         res = cur.fetchone()
         if res is None:
             raise ValueError("No game associated with id {} in database.".format(game_id))
-        (num_players, compressed_deck, compressed_actions, score, variant_id) = res
+        (num_players, compressed_deck, compressed_actions, score, variant_id, starting_player) = res
         deck = compress.decompress_deck(compressed_deck)
         actions = compress.decompress_actions(compressed_actions)
 
-        instance = hanab_live.HanabLiveInstance(deck, num_players, variant_id=variant_id)
+        instance = hanab_live.HanabLiveInstance(
+            deck,
+            num_players,
+            variant_id=variant_id,
+            starting_player=starting_player
+        )
 
         # check if the instance is already won
         if instance.max_score == score:

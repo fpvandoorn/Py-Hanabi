@@ -41,8 +41,8 @@ class HanabLiveInstance(hanab_game.HanabiInstance):
 
 
 class HanabLiveGameState(hanab_game.GameState):
-    def __init__(self, instance: HanabLiveInstance, starting_player: int = 0):
-        super().__init__(instance, starting_player)
+    def __init__(self, instance: HanabLiveInstance):
+        super().__init__(instance)
         self.instance: HanabLiveInstance = instance
 
     def make_action(self, action):
