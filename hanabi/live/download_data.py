@@ -210,6 +210,31 @@ def _process_game_row(game: Dict, var_id, export_all_games: bool = False):
     logger.debug("Imported game {}".format(game_id))
 
 
+def download_all_games_not_in_db(download_known_but_not_exported=True):
+    database.cur.execute(
+        "SELECT id FROM games "
+        + "WHERE actions is not null" if download_known_but_not_exported else ""
+        + "ORDER BY id"
+    )
+    game_ids = [game_id for (game_id,) in database.cur.fetchall()]
+    largest_game_id = game_ids[-1]
+    with alive_progress.alive_bar(
+            total=largest_game_id - len(game_ids),
+            title='Downloading all games not in database'
+    ) as bar:
+        for game_id in range(1, largest_game_id):
+            if game_id == game_ids[0]:
+                game_ids = game_ids[1:]
+                continue
+            try:
+                detailed_export_game(game_id)
+                logger.info("Found new game {} that was not in DB before".format(game_id))
+                bar()
+            except GameExportNoResponseFromSiteError:
+                bar()
+                continue
+
+
 def download_games(var_id, export_all_games: bool = False):
     name = variants.variant_name(var_id)
     page_size = 100
