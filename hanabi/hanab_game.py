@@ -105,6 +105,10 @@ class Action:
 
 
 class HanabiInstance:
+    # TODO Max: Deal with the following variants:
+    # - Critical fours (need to calculate dark suits differently)
+    # - Reversed (need to store information somehow and pass this to the hanabi game class)
+    # - Up or Down (in the long run we also want this, but seems a bit tedious, not needed now)
     def __init__(
             self,
             deck: List[DeckCard],
@@ -169,6 +173,10 @@ class HanabiInstance:
     @property
     def clue_increment(self):
         return 0.5 if self.clue_starved else 1
+
+    @property
+    def dark_suits(self):
+        return list(range(self.num_suits - self.num_dark_suits, self.num_suits))
 
 
 class GameState:
