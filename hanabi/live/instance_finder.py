@@ -56,8 +56,8 @@ def update_trivially_feasible_games(variant_id):
                     database.cur.execute("UPDATE seeds SET (feasible, max_score_theoretical) = (%s, %s) WHERE seed = "
                                          "(%s)", (True, variant.max_score, seed))
                     database.cur.execute(
-                        "INSERT INTO feasibility_certs (seed, game_id) VALUES (%s, %s)",
-                        (seed, game_id)
+                        "INSERT INTO score_lower_bounds (seed, score_lower_bound, game_id) VALUES (%s, %s, %s)",
+                        (seed, variant.max_score, game_id)
                     )
                     database.conn.commit()
                     break
