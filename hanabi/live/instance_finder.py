@@ -24,7 +24,7 @@ def update_trivially_feasible_games(variant_id):
     variant: variants.Variant = variants.Variant.from_db(variant_id)
     database.cur.execute("SELECT seed FROM seeds WHERE variant_id = (%s) AND feasible is null", (variant_id,))
     seeds = database.cur.fetchall()
-    logger.info('Checking variant {} (id {}), found {} seeds to check...'.format(variant.name, variant_id, len(seeds)))
+    logger.verbose('Checking variant {} (id {}), found {} seeds to check...'.format(variant.name, variant_id, len(seeds)))
 
     with alive_progress.alive_bar(total=len(seeds), title='{} ({})'.format(variant.name, variant_id)) as bar:
         for (seed,) in seeds:

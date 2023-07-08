@@ -1,6 +1,8 @@
 from enum import Enum
 from typing import List
 
+import alive_progress
+
 from hanabi import database
 from hanabi import logger
 from hanabi import hanab_game
@@ -172,24 +174,22 @@ def run_on_database(variant_id):
         (variant_id,)
     )
     res = database.cur.fetchall()
-    logger.info("Checking {} seeds of variant {} for infeasibility".format(len(res), variant_id))
-    for (seed, num_players, deck_str) in res:
-        deck = compress.decompress_deck(deck_str)
-        reasons = analyze(hanab_game.HanabiInstance(deck, num_players))
-        if reasons:
-            print("found infeasible seed {}: {}".format(seed, reasons))
-        else:
-            print("found nothing for seed {}".format(seed))
-        for reason in reasons:
-            database.cur.execute(
-                "INSERT INTO score_upper_bounds (seed, score_upper_bound, reason) "
-                "VALUES (%s,%s,%s) "
-                "ON CONFLICT (seed, reason) DO UPDATE "
-                "SET score_upper_bound = EXCLUDED.score_upper_bound",
-                (seed, reason.score_upper_bound, reason.type.value)
-            )
-            database.cur.execute(
-                "UPDATE seeds SET feasible = (%s) WHERE seed = (%s)",
-                (False, seed)
-            )
+    logger.verbose("Checking {} seeds of variant {} for infeasibility".format(len(res), variant_id))
+    with alive_progress.alive_bar(total=len(res), title='Check for infeasibility reasons in var {}'.format(variant_id)) as bar:
+        for (seed, num_players, deck_str) in res:
+            deck = compress.decompress_deck(deck_str)
+            reasons = analyze(hanab_game.HanabiInstance(deck, num_players))
+            for reason in reasons:
+                database.cur.execute(
+                    "INSERT INTO score_upper_bounds (seed, score_upper_bound, reason) "
+                    "VALUES (%s,%s,%s) "
+                    "ON CONFLICT (seed, reason) DO UPDATE "
+                    "SET score_upper_bound = EXCLUDED.score_upper_bound",
+                    (seed, reason.score_upper_bound, reason.type.value)
+                )
+                database.cur.execute(
+                    "UPDATE seeds SET feasible = (%s) WHERE seed = (%s)",
+                    (False, seed)
+                )
+            bar()
     database.conn.commit()
