@@ -64,7 +64,7 @@ $ psql
 ```
 Put the connection parameters in a config file (for the format, see `example_config.yaml`).
 This should be located at your system default for the application `hanabi-suite`,
-on POSIX systems this should be `~/.config/hanabi-suit/config.yaml`.
+on POSIX systems this should be `~/.config/hanabi-suite/config.yaml`.
 
 
 ## Usage of stuff that already works:
