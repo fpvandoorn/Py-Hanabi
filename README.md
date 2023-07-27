@@ -48,6 +48,15 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### SAT-solver
+After installing python, you should have installed `pysmt` with it, an interface to use SAT-solvers with python.
+We still need a solver, for this, run
+```
+$ pysmt-install --help
+// Pick a solver, e.g. z3 works
+$ pysmt-install --z3
+```
+
 ### PostgreSQL
 You need to install PostgreSQL on your system, for installation instructions refer to your distribution.
 Create a new database and user, for example:
@@ -57,10 +66,7 @@ $ psql
 # CREATE DATABASE "hanab-live";
 # \c hanab-live
 # CREATE USER hanabi WITH PASSWORD 'Insert password here';
-# GRANT ALL PRIVILEGES ON DATABASE "hanab-live" TO hanabi;
-# GRANT USAGE ON SCHEMA public TO hanabi;
-# GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO hanabi;
-# GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO hanabi;
+# ALTER DATABASE "hanab-live" OWNER TO hanabi;
 ```
 Put the connection parameters in a config file (for the format, see `example_config.yaml`).
 This should be located at your system default for the application `hanabi-suite`,
