@@ -56,7 +56,7 @@ $ sudo -iu postgres
 $ psql
 # CREATE DATABASE "hanab-live";
 # \c hanab-live
-# CREATE USER hanabi WITH PASSWORD '1234';
+# CREATE USER hanabi WITH PASSWORD 'Insert password here';
 # GRANT ALL PRIVILEGES ON DATABASE "hanab-live" TO hanabi;
 # GRANT USAGE ON SCHEMA public TO hanabi;
 # GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO hanabi;
