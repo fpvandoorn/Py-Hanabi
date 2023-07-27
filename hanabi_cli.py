@@ -1,4 +1,4 @@
-#! /bin/python3
+#! /usr//bin/env python3
 
 """
 Short executable file to start the command-line-interface for the hanabi package.
