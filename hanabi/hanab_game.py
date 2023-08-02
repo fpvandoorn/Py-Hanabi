@@ -287,6 +287,12 @@ class GameState:
 
     # Utilities
 
+    def is_playable(self, card: DeckCard):
+        return self.stacks[card.suitIndex] + 1 == card.rank
+
+    def is_trash(self, card: DeckCard):
+        return self.stacks[card.suitIndex] >= card.rank
+
     def holding_players(self, card):
         for (player, hand) in enumerate(self.hands):
             if card in hand:

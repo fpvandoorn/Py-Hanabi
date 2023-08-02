@@ -63,10 +63,8 @@ Create a new database and user, for example:
 ```
 $ sudo -iu postgres
 $ psql
-# CREATE DATABASE "hanab-live";
-# \c hanab-live
 # CREATE USER hanabi WITH PASSWORD 'Insert password here';
-# ALTER DATABASE "hanab-live" OWNER TO hanabi;
+# CREATE DATABASE "hanab-live" with owner "hanabi";
 ```
 Put the connection parameters in a config file (for the format, see `example_config.yaml`).
 This should be located at your system default for the application `hanabi-suite`,
