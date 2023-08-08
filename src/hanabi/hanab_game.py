@@ -264,6 +264,10 @@ class GameState:
     def deck_size(self):
         return self.instance.deck_size
 
+    @property
+    def draw_pile_size(self):
+        return self.deck_size - self.progress
+
     # Properties of GameState
 
     def is_over(self):
