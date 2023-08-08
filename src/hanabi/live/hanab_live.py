@@ -3,7 +3,7 @@ from typing import List, Dict, Tuple
 from hanab_game import Action, ParseError
 from hanabi import hanab_game
 from hanabi import constants
-from hanabi.live import variants
+from hanabi.live import variants, compress
 
 
 class HanabLiveInstance(hanab_game.HanabiInstance):
@@ -16,6 +16,8 @@ class HanabLiveInstance(hanab_game.HanabiInstance):
             one_less_card: bool = False,
             *args, **kwargs
     ):
+        self.one_extra_card = one_extra_card
+        self.one_less_card = one_less_card
         assert 2 <= num_players <= 6
         hand_size = constants.HAND_SIZES[num_players]
         if one_less_card:
@@ -86,6 +88,22 @@ class HanabLiveGameState(hanab_game.GameState):
     def __init__(self, instance: HanabLiveInstance):
         super().__init__(instance)
         self.instance: HanabLiveInstance = instance
+
+    def to_json(self):
+        return {
+            "actions": compress.compress_actions(self.actions),
+            "deck": compress.compress_deck(self.deck),
+            "players": ["Alice", "Bob", "Cathy", "Donald", "Emily", "Frank"][:self.num_players],
+            "notes": [[]] * self.num_players,
+            "options": {
+                "variant": self.instance.variant_id,
+                "deckPlays": self.instance.deck_plays,
+                "oneExtraCard": self.instance.one_extra_card,
+                "oneLessCard": self.instance.one_less_card,
+                "allOrNothing": self.instance.all_or_nothing,
+                "startingPlayer": self.instance.starting_player
+            }
+        }
 
     def make_action(self, action):
         match action.type:
