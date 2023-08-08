@@ -1,5 +1,6 @@
-from typing import List
+from typing import List, Dict, Tuple
 
+from hanab_game import Action, ParseError
 from hanabi import hanab_game
 from hanabi import constants
 from hanabi.live import variants
@@ -26,6 +27,7 @@ class HanabLiveInstance(hanab_game.HanabiInstance):
         self.variant_id = variant_id
         self.variant = variants.Variant.from_db(self.variant_id)
 
+
     @staticmethod
     def select_standard_variant_id(instance: hanab_game.HanabiInstance):
         err_msg = "Hanabi instance not supported by hanab.live, cannot convert to HanabLiveInstance: "
@@ -38,6 +40,50 @@ class HanabLiveInstance(hanab_game.HanabiInstance):
                 max(instance.num_suits - 4, 0), instance.num_suits
             )
         return constants.VARIANT_IDS_STANDARD_DISTRIBUTIONS[instance.num_suits][instance.num_dark_suits]
+
+
+def parse_json_game(game_json: Dict) -> Tuple[HanabLiveInstance, List[Action]]:
+    game_id = game_json.get('id', None)
+    players = game_json.get('players', [])
+    num_players = len(players)
+    if num_players < 2 or num_players > 6:
+        raise ParseError(num_players)
+
+    seed = game_json.get('seed', None)
+    if type(seed) != str:
+        raise ParseError("Unexpected seed, expected string, got {}".format(seed))
+
+    options = game_json.get('options', {})
+    var_id = variants.variant_id(options.get('variant', 'No Variant'))
+    deck_plays = options.get('deckPlays', False)
+    one_extra_card = options.get('oneExtraCard', False)
+    one_less_card = options.get('oneLessCard', False)
+    all_or_nothing = options.get('allOrNothing', False)
+    starting_player = options.get('startingPlayer', 0)
+    detrimental_characters = options.get('detrimentalCharacters', False)
+
+    try:
+        actions = [hanab_game.Action.from_json(action) for action in game_json.get('actions', [])]
+    except hanab_game.ParseError as e:
+        raise ParseError("Failed to parse actions") from e
+
+    try:
+        deck = [hanab_game.DeckCard.from_json(card) for card in game_json.get('deck', None)]
+    except hanab_game.ParseError as e:
+        raise ParseError("Failed to parse deck") from e
+
+    if detrimental_characters:
+        raise NotImplementedError(
+            "detrimental characters not supported, cannot determine score of game {}".format(game_id)
+        )
+    return HanabLiveInstance(
+        deck, num_players, var_id,
+        deck_plays=deck_plays,
+        one_less_card=one_less_card,
+        one_extra_card=one_extra_card,
+        all_or_nothing=all_or_nothing,
+        starting_player=starting_player
+    ), actions
 
 
 class HanabLiveGameState(hanab_game.GameState):
