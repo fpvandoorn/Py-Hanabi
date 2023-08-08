@@ -25,6 +25,12 @@ class DeckCard:
             raise ParseError("No rank specified in deck_card")
         return DeckCard(suit_index, rank)
 
+    def to_json(self):
+        return {
+            "suitIndex": self.suitIndex,
+            "rank": self.rank
+        }
+
     def colorize(self):
         color = ["green", "blue", "magenta", "yellow", "white", "cyan"][self.suitIndex]
         return colored(str(self), color)
@@ -83,6 +89,13 @@ class Action:
             action_target,
             action_value
         )
+
+    def to_json(self):
+        return {
+            "type": self.type.value,
+            "target": self.target,
+            "value": self.value
+        }
 
     def __repr__(self):
         match self.type:
