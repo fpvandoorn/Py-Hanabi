@@ -3,7 +3,7 @@ from typing import List, Dict, Tuple
 from hanab_game import Action, ParseError
 from hanabi import hanab_game
 from hanabi import constants
-from hanabi.live import variants, compress
+from hanabi.live import variants
 
 
 class HanabLiveInstance(hanab_game.HanabiInstance):
@@ -91,8 +91,8 @@ class HanabLiveGameState(hanab_game.GameState):
 
     def to_json(self):
         return {
-            "actions": compress.compress_actions(self.actions),
-            "deck": compress.compress_deck(self.deck),
+            "actions": [action.to_json() for action in self.actions],
+            "deck": [card.to_json() for card in self.deck],
             "players": ["Alice", "Bob", "Cathy", "Donald", "Emily", "Frank"][:self.num_players],
             "notes": [[]] * self.num_players,
             "options": {
