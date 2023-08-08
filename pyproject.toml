@@ -6,7 +6,7 @@ readme = "README.md"
 license = { file = "LICENSE" }
 keywords = [ "hanabi" ]
 authors = [
-  { name = "Maximilian Keßler", email = "git@maximilian-kessler.de" ] }
+  { name = "Maximilian Keßler", email = "git@maximilian-kessler.de" }
 ]
 dependencies = [
   "requests",
