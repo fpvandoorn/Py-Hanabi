@@ -1,0 +1,32 @@
+[project]
+name = "hanabi"
+version = "1.0.0"
+description = "Hanabi interface"
+readme = "README.md"
+license = { file = "LICENSE" }
+keywords = [ "hanabi" ]
+authors = [
+  { name = "Maximilian Keßler", email = "git@maximilian-kessler.de" ]
+]
+dependencies = [
+  "requests",
+  "requests_cache",
+  "pysmt",
+  "termcolor",
+  "more_itertools",
+  "psycopg2",
+  "alive_progress",
+  "argparse",
+  "verboselogs",
+  "pebble",
+  "platformdirs",
+  "PyYAML",
+  "cython==0.29.36"
+]
+
+[project.urls]
+"Homepage" = "https://gitlab.com/kesslermaximilian/hanabi"
+
+[build-system]
+requires = ["setuptools>=43.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
