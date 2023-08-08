@@ -177,7 +177,7 @@ def compress_game_state(state: Union[hanab_game.GameState, hanab_live.HanabLiveG
     return with_dashes
 
 
-def decompress_game_state(game_str: str) -> hanab_game.GameState:
+def decompress_game_state(game_str: str) -> hanab_live.HanabLiveGameState:
     game_str = game_str.replace("-", "")
     parts = game_str.split(",")
     if not len(parts) == 3:
@@ -211,8 +211,8 @@ def decompress_game_state(game_str: str) -> hanab_game.GameState:
     except ValueError:
         raise ValueError("Expected variant id, found: {}".format(variant_id))
 
-    instance = hanab_game.HanabiInstance(deck, num_players)
-    game = hanab_game.GameState(instance)
+    instance = hanab_live.HanabLiveInstance(deck, num_players, variant_id)
+    game = hanab_live.HanabLiveGameState(instance)
 
     # TODO: game is not in consistent state
     game.actions = actions
