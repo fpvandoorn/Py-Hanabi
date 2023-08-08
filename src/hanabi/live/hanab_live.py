@@ -49,10 +49,6 @@ def parse_json_game(game_json: Dict) -> Tuple[HanabLiveInstance, List[Action]]:
     if num_players < 2 or num_players > 6:
         raise ParseError(num_players)
 
-    seed = game_json.get('seed', None)
-    if type(seed) != str:
-        raise ParseError("Unexpected seed, expected string, got {}".format(seed))
-
     options = game_json.get('options', {})
     var_id = variants.variant_id(options.get('variant', 'No Variant'))
     deck_plays = options.get('deckPlays', False)
