@@ -324,9 +324,9 @@ class GameState:
             )
             )
         return {
-            "deck": self.instance.deck,
+            "deck": [card.to_json() for card in self.instance.deck],
             "players": self.instance.player_names,
-            "actions": self.actions,
+            "actions": [action.to_json() for action in self.actions],
             "first_player": 0,
             "options": {
                 "variant": "No Variant",
