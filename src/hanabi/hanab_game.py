@@ -310,6 +310,17 @@ class GameState:
     def is_trash(self, card: DeckCard):
         return self.stacks[card.suitIndex] >= card.rank
 
+    def is_critical(self, card: DeckCard):
+        if card.rank == 5:
+            return True
+        if self.is_trash(card):
+            return False
+        count = 0
+        for hand in self.hands:
+            count += hand.count(card)
+        count += self.deck[self.progress:].count(card)
+        return count == 1
+
     def holding_players(self, card):
         for (player, hand) in enumerate(self.hands):
             if card in hand:
