@@ -1,6 +1,6 @@
 from typing import List, Dict, Tuple
 
-from hanab_game import Action, ParseError
+from hanabi.hanab_game import Action, ParseError
 from hanabi import hanab_game
 from hanabi import constants
 from hanabi.live import variants
