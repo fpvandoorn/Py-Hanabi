@@ -125,21 +125,6 @@ class HanabLiveGameState(hanab_game.GameState):
             }
         }
 
-    def make_action(self, action):
-        match action.type:
-            case hanab_game.ActionType.ColorClue | hanab_game.ActionType.RankClue:
-                assert(self.clues > 0)
-                self.actions.append(action)
-                self.clues -= self.instance.clue_increment
-                self._make_turn()
-                # TODO: could check that the clue specified is in fact legal
-            case hanab_game.ActionType.Play:
-                self.play(action.target)
-            case hanab_game.ActionType.Discard:
-                self.discard(action.target)
-            case hanab_game.ActionType.EndGame | hanab_game.ActionType.VoteTerminate:
-                self.over = True
-
     def _waste_clue(self) -> hanab_game.Action:
         for player in range(self.turn + 1, self.turn + self.num_players):
             for card in self.hands[player % self.num_players]:

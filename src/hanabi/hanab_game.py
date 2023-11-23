@@ -252,6 +252,21 @@ class GameState:
         self.clues -= 1
         self._make_turn()
 
+    def make_action(self, action):
+        match action.type:
+            case ActionType.ColorClue | ActionType.RankClue:
+                assert self.clues > 0
+                self.actions.append(action)
+                self.clues -= self.instance.clue_increment
+                self._make_turn()
+                # TODO: could check that the clue specified is in fact legal
+            case ActionType.Play:
+                self.play(action.target)
+            case ActionType.Discard:
+                self.discard(action.target)
+            case ActionType.EndGame | ActionType.VoteTerminate:
+                self.over = True
+
     # Forward some properties of the underlying instance
     @property
     def num_players(self):
