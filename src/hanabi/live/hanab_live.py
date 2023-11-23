@@ -44,7 +44,8 @@ class HanabLiveInstance(hanab_game.HanabiInstance):
         return constants.VARIANT_IDS_STANDARD_DISTRIBUTIONS[instance.num_suits][instance.num_dark_suits]
 
 
-def parse_json_game(game_json: Dict) -> Tuple[HanabLiveInstance, List[Action]]:
+def parse_json_game(game_json: Dict, as_hanab_live_instance: bool = True) \
+        -> Tuple[HanabLiveInstance | hanab_game.HanabiInstance, List[Action]]:
     game_id = game_json.get('id', None)
     players = game_json.get('players', [])
     num_players = len(players)
@@ -52,7 +53,7 @@ def parse_json_game(game_json: Dict) -> Tuple[HanabLiveInstance, List[Action]]:
         raise ParseError(num_players)
 
     options = game_json.get('options', {})
-    var_id = variants.variant_id(options.get('variant', 'No Variant'))
+    var_name = options.get('variant', 'No Variant')
     deck_plays = options.get('deckPlays', False)
     one_extra_card = options.get('oneExtraCard', False)
     one_less_card = options.get('oneLessCard', False)
@@ -74,14 +75,33 @@ def parse_json_game(game_json: Dict) -> Tuple[HanabLiveInstance, List[Action]]:
         raise NotImplementedError(
             "detrimental characters not supported, cannot determine score of game {}".format(game_id)
         )
-    return HanabLiveInstance(
-        deck, num_players, var_id,
-        deck_plays=deck_plays,
-        one_less_card=one_less_card,
-        one_extra_card=one_extra_card,
-        all_or_nothing=all_or_nothing,
-        starting_player=starting_player
-    ), actions
+    if as_hanab_live_instance:
+        var_id = variants.variant_id(var_name)
+        return HanabLiveInstance(
+            deck, num_players, var_id,
+            deck_plays=deck_plays,
+            one_less_card=one_less_card,
+            one_extra_card=one_extra_card,
+            all_or_nothing=all_or_nothing,
+            starting_player=starting_player
+        ), actions
+    else:
+        hand_size = constants.HAND_SIZES[num_players]
+        if one_less_card:
+            hand_size -= 1
+        if one_extra_card:
+            hand_size += 1
+
+        clue_starved = 'Clue Starved' in var_name
+
+        return hanab_game.HanabiInstance(
+            deck, num_players, hand_size,
+            clue_starved=clue_starved,
+            deck_plays=deck_plays,
+            all_or_nothing=all_or_nothing,
+            starting_player=starting_player
+        ), actions
+
 
 
 class HanabLiveGameState(hanab_game.GameState):
