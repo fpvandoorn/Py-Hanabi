@@ -255,9 +255,9 @@ class GameState:
     def make_action(self, action):
         match action.type:
             case ActionType.ColorClue | ActionType.RankClue:
-                assert self.clues > 0
+                assert self.clues >= 1
                 self.actions.append(action)
-                self.clues -= self.instance.clue_increment
+                self.clues -= 1
                 self._make_turn()
                 # TODO: could check that the clue specified is in fact legal
             case ActionType.Play:
