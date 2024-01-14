@@ -39,6 +39,8 @@ class DeckCard:
         return self.suitIndex == other.suitIndex and self.rank == other.rank
 
     def __repr__(self):
+        if self.suitIndex == 0 and self.rank == 0:
+            return "kt"
         return constants.COLOR_INITIALS[self.suitIndex] + str(self.rank)
 
     def __hash__(self):
