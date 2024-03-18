@@ -1,8 +1,10 @@
 import alive_progress
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 import psycopg2.errors
+import psycopg2.extras
 import platformdirs
+import unidecode
 
 from hanabi import hanab_game
 from hanabi import constants
@@ -49,6 +51,29 @@ class GameExportInvalidNumberOfPlayersError(GameExportInvalidFormatError):
         )
 
 
+def ensure_users_in_db_and_get_ids(usernames: List[str]):
+    normalized_usernames = [unidecode.unidecode(username) for username in usernames]
+    psycopg2.extras.execute_values(
+        database.cur,
+        "INSERT INTO users (username, normalized_username)"
+        "VALUES %s "
+        "ON CONFLICT (username) DO NOTHING ",
+        zip(usernames, normalized_usernames)
+    )
+
+    # To only do one DB query, we sort by the normalized username.
+    ids = []
+    for username in usernames:
+        database.cur.execute(
+            "SELECT id FROM users "
+            "WHERE username = %s",
+            (username,)
+        )
+        (id, ) = database.cur.fetchone()
+        ids.append(id)
+
+    return ids
+
 #
 def detailed_export_game(
           game_id: int
@@ -94,12 +119,19 @@ def detailed_export_game(
 
     options = game_json.get('options', {})
     var_id = var_id or variants.variant_id(options.get('variant', 'No Variant'))
+    timed = options.get('timed', False)
+    time_base = options.get('timeBase', 0)
+    time_per_turn = options.get('timePerTurn', 0)
+    speedrun = options.get('speedrun', False)
+    card_cycle = options.get('cardCycle', False)
     deck_plays = options.get('deckPlays', False)
+    empty_clues = options.get('emptyClues', False)
     one_extra_card = options.get('oneExtraCard', False)
     one_less_card = options.get('oneLessCard', False)
     all_or_nothing = options.get('allOrNothing', False)
-    starting_player = options.get('startingPlayer', 0)
     detrimental_characters = options.get('detrimentalCharacters', False)
+
+    starting_player = options.get('startingPlayer', 0)
 
     try:
         actions = [hanab_game.Action.from_json(action) for action in game_json.get('actions', [])]
@@ -131,44 +163,75 @@ def detailed_export_game(
             game.make_action(action)
         score = game.score
 
-    try:
-        compressed_deck = compress.compress_deck(deck)
-    except compress.InvalidFormatError as e:
-        logger.error("Failed to compress deck while exporting game {}: {}".format(game_id, deck))
-        raise GameExportInvalidFormatError(game_id, "Failed to compress deck") from e
-
-    try:
-        compressed_actions = compress.compress_actions(actions)
-    except compress.InvalidFormatError as e:
-        logger.error("Failed to compress actions while exporting game {}".format(game_id))
-        raise GameExportInvalidFormatError(game_id, "Failed to compress actions") from e
-
     if not seed_exists:
         database.cur.execute(
-            "INSERT INTO seeds (seed, num_players, starting_player, variant_id, deck)"
-            "VALUES (%s, %s, %s, %s, %s)"
+            "INSERT INTO seeds (seed, num_players, starting_player, variant_id)"
+            "VALUES (%s, %s, %s, %s)"
             "ON CONFLICT (seed) DO NOTHING",
-            (seed, num_players, starting_player, var_id, compressed_deck)
+            (seed, num_players, starting_player, var_id)
         )
         logger.debug("New seed {} imported.".format(seed))
 
+        values = []
+        for index, card in enumerate(deck):
+            values.append((seed, index, card.suitIndex, card.rank))
+
+        psycopg2.extras.execute_values(
+            database.cur,
+            "INSERT INTO decks (seed, deck_index, suit_index, rank)"
+            "VALUES %s "
+            "ON CONFLICT (seed, deck_index) DO UPDATE SET "
+            "(suit_index, rank) = (excluded.suit_index, excluded.rank)",
+            values
+        )
+
     database.cur.execute(
         "INSERT INTO games ("
-        "id, num_players, score, seed, variant_id, deck_plays, one_extra_card, one_less_card,"
-        "all_or_nothing, detrimental_characters, actions"
+        "id, num_players, starting_player, variant_id, timed, time_base, time_per_turn, speedrun, card_cycle, "
+        "deck_plays, empty_clues, one_extra_card, one_less_card,"
+        "all_or_nothing, detrimental_characters, seed, score"
         ")"
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
         "ON CONFLICT (id) DO UPDATE SET ("
-        "deck_plays, one_extra_card, one_less_card, all_or_nothing, actions, detrimental_characters"
+        "timed, time_base, time_per_turn, speedrun, card_cycle, deck_plays, empty_clues, one_extra_card,"
+        "all_or_nothing, detrimental_characters"
         ") = ("
-        "EXCLUDED.deck_plays, EXCLUDED.one_extra_card, EXCLUDED.one_less_card, EXCLUDED.all_or_nothing,"
-        "EXCLUDED.actions, EXCLUDED.detrimental_characters"
+        "EXCLUDED.timed, EXCLUDED.time_base, EXCLUDED.time_per_turn, EXCLUDED.speedrun, EXCLUDED.card_cycle, "
+        "EXCLUDED.deck_plays, EXCLUDED.empty_clues, EXCLUDED.one_extra_card,"
+        "EXCLUDED.all_or_nothing, EXCLUDED.detrimental_characters"
         ")",
         (
-            game_id, num_players, score, seed, var_id, deck_plays, one_extra_card, one_less_card,
-            all_or_nothing, detrimental_characters, compressed_actions
+            game_id, num_players, starting_player, var_id, timed, time_base, time_per_turn, speedrun, card_cycle,
+            deck_plays, empty_clues, one_extra_card, one_less_card,
+            all_or_nothing, detrimental_characters, seed, score
         )
     )
+
+    # Insert participants into database
+    ids = ensure_users_in_db_and_get_ids(players)
+    game_participant_values = []
+    for index, user_id in enumerate(ids):
+        game_participant_values.append((game_id, user_id, index))
+    psycopg2.extras.execute_values(
+        database.cur,
+        "INSERT INTO game_participants (game_id, user_id, seat) VALUES %s "
+        "ON CONFLICT (game_id, user_id) DO UPDATE SET seat = excluded.seat",
+        game_participant_values
+    )
+
+    # Insert actions into database
+    action_values = []
+    for turn, action in enumerate(actions):
+        action: hanab_game.Action
+        action_values.append((game_id, turn, action.type.value, action.target, action.value or 0))
+
+    psycopg2.extras.execute_values(
+        database.cur,
+        "INSERT INTO game_actions (game_id, turn, type, target, value) "
+        "VALUES %s",
+        action_values
+    )
+
     logger.debug("Imported game {}".format(game_id))
 
 
@@ -191,6 +254,8 @@ def _process_game_row(game: Dict, var_id, export_all_games: bool = False):
             )
         return
 #        raise GameExportInvalidNumberOfPlayersError(game_id, num_players, users)
+
+    # Ensure users in database and find out their ids
 
     if export_all_games:
         detailed_export_game(game_id, score=score, var_id=var_id)
