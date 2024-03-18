@@ -8,6 +8,7 @@ from hanabi.live import variants
 from hanabi.live import check_game
 from hanabi.live import download_data
 from hanabi.live import compress
+from hanabi.live import instance_finder
 from hanabi.database import init_database
 from hanabi.database import global_db_connection_manager
 
@@ -77,6 +78,11 @@ def subcommand_download(
         logger.info("Successfully exported games for all variants")
 
 
+def subcommand_solve(var_id):
+    instance_finder.solve_unknown_seeds(var_id, '')
+
+
+
 def subcommand_gen_config():
     global_db_connection_manager.create_config_file()
 
@@ -129,6 +135,11 @@ def add_config_gen_subparser(subparsers):
     parser = subparsers.add_parser('gen-config', help='Generate config file at default location')
 
 
+def add_solve_subparser(subparsers):
+    parser = subparsers.add_parser('solve', help='Seed solving')
+    parser.add_argument('--var_id', type=int, help='Variant id to solve instances from.', default=0)
+
+
 def main_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog='hanabi_suite',
@@ -141,6 +152,7 @@ def main_parser() -> argparse.ArgumentParser:
     add_analyze_subparser(subparsers)
     add_download_subparser(subparsers)
     add_config_gen_subparser(subparsers)
+    add_solve_subparser(subparsers)
 
     return parser
 
@@ -151,7 +163,8 @@ def hanabi_cli():
         'analyze': subcommand_analyze,
         'init': subcommand_init,
         'download': subcommand_download,
-        'gen-config': subcommand_gen_config
+        'gen-config': subcommand_gen_config,
+        'solve': subcommand_solve
     }[args.command]
 
     if args.command != 'gen-config':
