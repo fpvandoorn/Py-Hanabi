@@ -37,7 +37,7 @@ class HanabLiveInstance(hanab_game.HanabiInstance):
             err_msg + "Illegal number of suits ({}) found, must be in range [3,6]".format(instance.num_suits)
         assert 0 <= instance.num_dark_suits <= 2, \
             err_msg + "Illegal number of dark suits ({}) found, must be in range [0,2]".format(instance.num_dark_suits)
-        assert 4 <= instance.num_suits - instance.num_dark_suits, \
+        assert 4 <= max(instance.num_suits, 4) - instance.num_dark_suits, \
             err_msg + "Illegal ratio of dark suits to suits, can have at most {} dark suits with {} total suits".format(
                 max(instance.num_suits - 4, 0), instance.num_suits
             )
