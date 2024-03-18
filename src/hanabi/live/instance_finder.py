@@ -93,9 +93,8 @@ mutex = threading.Lock()
 def solve_instance(instance: hanab_game.HanabiInstance):
     # first, sanity check on running out of pace
     result = deck_analyzer.analyze(instance)
-    if result is not None:
-        assert type(result) == deck_analyzer.InfeasibilityReason
-        logger.debug("found infeasible deck")
+    if len(result) != 0:
+        logger.info("found infeasible deck by foreward analysis")
         return False, None, None
     for num_remaining_cards in [0, 20]:
         #        logger.info("trying with {} remaining cards".format(num_remaining_cards))
