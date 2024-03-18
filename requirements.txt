@@ -11,3 +11,4 @@ pebble
 platformdirs
 PyYAML
 cython==0.29.36
+unidecode
