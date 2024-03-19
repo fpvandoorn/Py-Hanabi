@@ -8,6 +8,8 @@ from hanabi.live import hanab_live
 from hanabi.live import compress
 from hanabi.solvers import sat
 
+from hanabi.database import games_db_interface
+
 
 # returns minimal number T of turns (from game) after which instance was infeasible
 # and a replay achieving maximum score while following the replay for the first (T-1) turns:
@@ -19,24 +21,15 @@ from hanabi.solvers import sat
 def check_game(game_id: int) -> Tuple[int, hanab_game.GameState]:
     logger.debug("Analysing game {}".format(game_id))
     with database.conn.cursor() as cur:
-        cur.execute("SELECT games.num_players, deck, actions, score, games.variant_id, starting_player FROM games "
-                    "INNER JOIN seeds ON seeds.seed = games.seed "
+        cur.execute("SELECT games.num_players, score, games.variant_id, starting_player FROM games "
                     "WHERE games.id = (%s)",
                     (game_id,)
                     )
         res = cur.fetchone()
         if res is None:
             raise ValueError("No game associated with id {} in database.".format(game_id))
-        (num_players, compressed_deck, compressed_actions, score, variant_id, starting_player) = res
-        deck = compress.decompress_deck(compressed_deck)
-        actions = compress.decompress_actions(compressed_actions)
-
-        instance = hanab_live.HanabLiveInstance(
-            deck,
-            num_players,
-            variant_id=variant_id,
-            starting_player=starting_player
-        )
+        (num_players, score, variant_id, starting_player) = res
+        instance, actions = games_db_interface.load_game_parts(game_id)
 
         # check if the instance is already won
         if instance.max_score == score:

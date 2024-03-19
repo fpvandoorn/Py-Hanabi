@@ -3,6 +3,10 @@ from typing import List, Tuple
 import psycopg2.extras
 
 import hanabi.hanab_game
+import hanabi.live.hanab_live
+from hanabi import logger
+
+from hanabi.database import conn, cur
 
 
 def store_actions(game_id: int, actions: List[hanabi.hanab_game.Action]):
@@ -10,8 +14,6 @@ def store_actions(game_id: int, actions: List[hanabi.hanab_game.Action]):
     for turn, action in enumerate(actions):
         vals.append((game_id, turn, action.type.value, action.target, action.value or 0))
 
-    conn = conn_manager.get_connection()
-    cur = conn.cursor()
     psycopg2.extras.execute_values(
         cur,
         "INSERT INTO game_actions (game_id, turn, type, target, value) "
@@ -28,21 +30,18 @@ def store_deck_for_seed(seed: str, deck: List[hanabi.hanab_game.DeckCard]):
     for index, card in enumerate(deck):
         vals.append((seed, index, card.suitIndex, card.rank))
 
-    conn = conn_manager.get_connection()
-    cur = conn.cursor()
     psycopg2.extras.execute_values(
         cur,
-        "INSERT INTO seeds (seed, card_index, suit_index, rank) "
+        "INSERT INTO decks (seed, deck_index, suit_index, rank) "
         "VALUES %s "
-        "ON CONFLICT (seed, card_index) "
-        "DO NOTHING",
+        "ON CONFLICT (seed, deck_index) DO UPDATE SET "
+        "(suit_index, rank) = (excluded.suit_index, excluded.rank)",
         vals
     )
     conn.commit()
 
 
 def load_actions(game_id: int) -> List[hanabi.hanab_game.Action]:
-    cur = conn_manager.get_new_cursor()
     cur.execute("SELECT type, target, value FROM game_actions "
                 "WHERE game_id = %s "
                 "ORDER BY turn ASC",
@@ -60,10 +59,9 @@ def load_actions(game_id: int) -> List[hanabi.hanab_game.Action]:
 
 
 def load_deck(seed: str) -> List[hanabi.hanab_game.DeckCard]:
-    cur = conn_manager.get_new_cursor()
-    cur.execute("SELECT card_index, suit_index, rank FROM seeds "
+    cur.execute("SELECT deck_index, suit_index, rank FROM decks "
                 "WHERE seed = %s "
-                "ORDER BY card_index ASC",
+                "ORDER BY deck_index ASC",
                 (seed,)
                 )
     deck = []
@@ -79,15 +77,17 @@ def load_deck(seed: str) -> List[hanabi.hanab_game.DeckCard]:
     return deck
 
 
-def load_game_parts(game_id: int) -> Tuple[hanabi.hanab_game.HanabiInstance, List[hanabi.hanab_game.Action], str]:
+def load_game_parts(game_id: int) -> Tuple[hanabi.live.hanab_live.HanabLiveInstance, List[hanabi.hanab_game.Action]]:
     """
     Loads information on game from database
     @param game_id: ID of game
     @return: Instance (i.e. deck + settings) of game, list of actions, variant name
     """
-    cur = conn_manager.get_new_cursor()
     cur.execute(
-        "SELECT games.num_players, games.seed, variants.clue_starved, variants.name "
+        "SELECT "
+        "games.num_players, games.seed, games.one_extra_card, games.one_less_card, games.deck_plays, "
+        "games.all_or_nothing,"
+        "variants.clue_starved, variants.name, variants.id, variants.throw_it_in_a_hole "
         "FROM games "
         "INNER JOIN variants"
         "  ON games.variant_id = variants.id "
@@ -101,19 +101,29 @@ def load_game_parts(game_id: int) -> Tuple[hanabi.hanab_game.HanabiInstance, Lis
         raise ValueError(err_msg)
 
     # Unpack results now
-    (num_players, seed, clue_starved, variant_name) = res
+    (num_players, seed, one_extra_card, one_less_card, deck_plays, all_or_nothing, clue_starved, variant_name, variant_id, throw_it_in_a_hole) = res
 
     actions = load_actions(game_id)
     deck = load_deck(seed)
 
-    instance = hanabi.hanab_game.HanabiInstance(deck, num_players, clue_starved=clue_starved)
-    return instance, actions, variant_name
+    instance = hanabi.live.hanab_live.HanabLiveInstance(
+        deck=deck,
+        num_players=num_players,
+        variant_id=variant_id,
+        one_extra_card=one_extra_card,
+        one_less_card=one_less_card,
+        fives_give_clue=not throw_it_in_a_hole,
+        deck_plays=deck_plays,
+        all_or_nothing=all_or_nothing,
+        clue_starved=clue_starved
+    )
+    return instance, actions
 
 
-def load_game(game_id: int) -> Tuple[hanabi.hanab_game.GameState, str]:
-    instance, actions, variant_name = load_game_parts(game_id)
-    game = hanabi.hanab_game.GameState(instance)
+def load_game(game_id: int) -> hanabi.live.hanab_live.HanabLiveGameState:
+    instance, actions = load_game_parts(game_id)
+    game = hanabi.live.hanab_live.HanabLiveGameState(instance)
     for action in actions:
         game.make_action(action)
-    return game, variant_name
+    return game
 

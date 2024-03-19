@@ -11,9 +11,10 @@ from hanabi import constants
 from hanabi import logger
 from hanabi import database
 from hanabi.live import site_api
-from hanabi.live import compress
 from hanabi.live import variants
 from hanabi.live import hanab_live
+
+from hanabi.database import games_db_interface
 
 
 
@@ -172,18 +173,7 @@ def detailed_export_game(
         )
         logger.debug("New seed {} imported.".format(seed))
 
-        values = []
-        for index, card in enumerate(deck):
-            values.append((seed, index, card.suitIndex, card.rank))
-
-        psycopg2.extras.execute_values(
-            database.cur,
-            "INSERT INTO decks (seed, deck_index, suit_index, rank)"
-            "VALUES %s "
-            "ON CONFLICT (seed, deck_index) DO UPDATE SET "
-            "(suit_index, rank) = (excluded.suit_index, excluded.rank)",
-            values
-        )
+        games_db_interface.store_deck_for_seed(seed, deck)
 
     database.cur.execute(
         "INSERT INTO games ("
@@ -219,18 +209,7 @@ def detailed_export_game(
         game_participant_values
     )
 
-    # Insert actions into database
-    action_values = []
-    for turn, action in enumerate(actions):
-        action: hanab_game.Action
-        action_values.append((game_id, turn, action.type.value, action.target, action.value or 0))
-
-    psycopg2.extras.execute_values(
-        database.cur,
-        "INSERT INTO game_actions (game_id, turn, type, target, value) "
-        "VALUES %s",
-        action_values
-    )
+    games_db_interface.store_actions(game_id, actions)
 
     logger.debug("Imported game {}".format(game_id))
 
@@ -277,6 +256,20 @@ def _process_game_row(game: Dict, var_id, export_all_games: bool = False):
         database.cur.execute("ROLLBACK TO seed_insert")
         detailed_export_game(game_id, score=score, var_id=var_id)
     database.cur.execute("RELEASE seed_insert")
+
+    # Insert participants into database
+    ids = ensure_users_in_db_and_get_ids(users)
+    game_participant_values = []
+    for index, user_id in enumerate(ids):
+        game_participant_values.append((game_id, user_id, index))
+    psycopg2.extras.execute_values(
+        database.cur,
+        "INSERT INTO game_participants (game_id, user_id, seat) VALUES %s "
+        "ON CONFLICT (game_id, user_id) DO UPDATE SET seat = excluded.seat",
+        game_participant_values
+    )
+
+
     logger.debug("Imported game {}".format(game_id))
 
 
