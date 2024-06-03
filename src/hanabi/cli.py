@@ -1,4 +1,5 @@
 import argparse
+import json
 from typing import Optional
 
 import verboselogs
@@ -36,6 +37,13 @@ def subcommand_analyze(game_id: int, download: bool = False):
             'A replay achieving perfect score from the previous turn onwards is: {}#{}'
             .format(compress.link(sol), turn)
         )
+
+
+def subcommand_decompress(game_link: str):
+    parts = game_link.split('replay-json/')
+    game_str = parts[-1].rstrip('/')
+    game = compress.decompress_game_state(game_str)
+    print(json.dumps(game.to_json()))
 
 
 def subcommand_init(force: bool, populate: bool):
@@ -139,6 +147,10 @@ def add_solve_subparser(subparsers):
     parser = subparsers.add_parser('solve', help='Seed solving')
     parser.add_argument('--var_id', type=int, help='Variant id to solve instances from.', default=0)
 
+def add_decompress_subparser(subparsers):
+    parser = subparsers.add_parser('decompress', help='Decompress a hanab.live JSON-encoded replay link')
+    parser.add_argument('game_link', type=str)
+
 
 def main_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -153,6 +165,7 @@ def main_parser() -> argparse.ArgumentParser:
     add_download_subparser(subparsers)
     add_config_gen_subparser(subparsers)
     add_solve_subparser(subparsers)
+    add_decompress_subparser(subparsers)
 
     return parser
 
@@ -164,7 +177,8 @@ def hanabi_cli():
         'init': subcommand_init,
         'download': subcommand_download,
         'gen-config': subcommand_gen_config,
-        'solve': subcommand_solve
+        'solve': subcommand_solve,
+        'decompress': subcommand_decompress
     }[args.command]
 
     if args.command != 'gen-config':
