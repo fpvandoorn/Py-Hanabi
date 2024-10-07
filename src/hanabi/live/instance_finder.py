@@ -7,6 +7,7 @@ import alive_progress
 import threading
 import time
 
+import hanabi.hanab_game
 from hanabi import logger
 from hanabi.solvers.sat import solve_sat
 from hanabi import database
@@ -16,8 +17,9 @@ from hanabi import hanab_game
 from hanabi.solvers import greedy_solver
 from hanabi.solvers import deck_analyzer
 from hanabi.live import variants
+from hanabi.database.games_db_interface import load_deck
 
-MAX_PROCESSES = 6
+MAX_PROCESSES = 3
 
 
 def update_trivially_feasible_games(variant_id):
@@ -129,10 +131,9 @@ def solve_instance(instance: hanab_game.HanabiInstance):
 
 
 @pebble.concurrent.process(timeout=150)
-def solve_seed_with_timeout(seed, num_players, deck_compressed, var_name: Optional[str] = None):
+def solve_seed_with_timeout(seed, num_players, deck, var_name: Optional[str] = None):
     try:
         logger.verbose("Starting to solve seed {}".format(seed))
-        deck = compress.decompress_deck(deck_compressed)
         t0 = time.perf_counter()
         solvable, solution, num_remaining_cards = solve_instance(hanab_game.HanabiInstance(deck, num_players))
         t1 = time.perf_counter()
@@ -161,8 +162,8 @@ def solve_seed_with_timeout(seed, num_players, deck_compressed, var_name: Option
         traceback.print_exc()
 
 
-def solve_seed(seed, num_players, deck_compressed, var_name: Optional[str] = None):
-    f = solve_seed_with_timeout(seed, num_players, deck_compressed, var_name)
+def solve_seed(seed, num_players, deck, var_name: Optional[str] = None):
+    f = solve_seed_with_timeout(seed, num_players, deck, var_name)
     try:
         return f.result()
     except TimeoutError:
@@ -172,13 +173,26 @@ def solve_seed(seed, num_players, deck_compressed, var_name: Optional[str] = Non
 
 def solve_unknown_seeds(variant_id, variant_name: Optional[str] = None):
     database.cur.execute(
-        "SELECT seed, num_players, deck FROM seeds WHERE variant_id = (%s) AND feasible IS NULL",
+        "SELECT seeds.seed, num_players, array_agg(suit_index order by deck_index asc), array_agg(rank order by deck_index asc) "
+        "FROM seeds "
+        "INNER JOIN decks ON seeds.seed = decks.seed "
+        "WHERE variant_id = (%s) AND feasible IS NULL AND num_players = 2"
+        "GROUP BY seeds.seed ",
         (variant_id,)
     )
     res = database.cur.fetchall()
+    data = []
+    print("processing decks... ", end='')
+    for (seed, num_players, suits, ranks) in res:
+        assert len(suits) == len(ranks)
+        deck = []
+        for (suit, rank) in zip(suits, ranks):
+            deck.append(hanabi.hanab_game.DeckCard(suit, rank))
+        data.append((seed, num_players, deck))
+    print("done.")
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=MAX_PROCESSES) as executor:
-        fs = [executor.submit(solve_seed, r[0], r[1], r[2], variant_name) for r in res]
+        fs = [executor.submit(solve_seed, d[0], d[1], d[2], variant_name) for d in data]
         with alive_progress.alive_bar(len(res), title='Seed solving on {}'.format(variant_name)) as bar:
             for f in concurrent.futures.as_completed(fs):
                 bar()
