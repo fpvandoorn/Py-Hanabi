@@ -250,12 +250,12 @@ def _process_game_row(game: Dict, var_id, export_all_games: bool = False):
             "ON CONFLICT (id) DO NOTHING",
             (game_id, seed, num_players, score, var_id)
         )
+        database.cur.execute("RELEASE seed_insert")
     except psycopg2.errors.ForeignKeyViolation:
         # Sometimes, seed is not present in the database yet, then we will have to query the full game details
         # (including the seed) to export it accordingly
         database.cur.execute("ROLLBACK TO seed_insert")
         detailed_export_game(game_id, score=score, var_id=var_id)
-    database.cur.execute("RELEASE seed_insert")
 
     # Insert participants into database
     ids = ensure_users_in_db_and_get_ids(users)
