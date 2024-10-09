@@ -110,15 +110,16 @@ def analyze(instance: hanab_game.HanabiInstance, only_find_first=False) -> List[
             pass  # card is trash
         elif card.rank > stacks[card.suitIndex] + 1:
             # need to store card
-            if card in stored_cards or card.rank == 5:
+            if card in stored_cards or card.rank == 5 or card == instance.deck[-1]:
                 stored_crits.add(card)
             stored_cards.add(card)
+
 
         # check for out of handsize (this number can be negative, in which case nothing applies)
         # Note the +1 at the end, which is there because we have to discard next,
         # so even if we currently have as many crits as we can hold, we have to discard one
         num_forced_crit_discards = len(stored_crits) - instance.num_players * instance.hand_size + 1
-        if len(stored_crits) - instance.num_players * instance.hand_size > max_forced_crit_discard:
+        if num_forced_crit_discards > max_forced_crit_discard:
             worst_crit_index = i
             max_forced_crit_discard = num_forced_crit_discards
             if only_find_first:
