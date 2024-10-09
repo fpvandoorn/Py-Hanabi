@@ -20,7 +20,7 @@ CREATE INDEX seeds_variant_idx ON seeds (variant_id);
 
 DROP TABLE IF EXISTS decks CASCADE;
 CREATE TABLE decks (
-    seed TEXT REFERENCES seeds (seed),
+    seed TEXT REFERENCES seeds (seed) ON DELETE CASCADE,
     /* Order of card in deck*/
     deck_index SMALLINT NOT NULL,
     /* Suit */
