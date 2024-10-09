@@ -221,4 +221,4 @@ def decompress_game_state(game_str: str) -> hanab_live.HanabLiveGameState:
 
 def link(game_state: hanab_game.GameState) -> str:
     compressed = compress_game_state(game_state)
-    return "https://hanab.live/shared-replay-json/{}".format(compressed)
+    return "https://hanab.live/replay-json/{}".format(compressed)
