@@ -267,7 +267,12 @@ class GameState:
             case ActionType.Discard:
                 self.discard(action.target)
             case ActionType.EndGame | ActionType.VoteTerminate:
+                self.actions.append(action)
                 self.over = True
+
+    def terminate(self):
+        action = Action(ActionType.EndGame, 0, 0)
+        self.make_action(action)
 
     # Forward some properties of the underlying instance
     @property
