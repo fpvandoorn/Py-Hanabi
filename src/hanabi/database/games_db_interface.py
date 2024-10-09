@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import psycopg2.extras
 
@@ -75,6 +75,19 @@ def load_deck(seed: str) -> List[hanabi.hanab_game.DeckCard]:
         logger.error(err_msg)
         raise ValueError(err_msg)
     return deck
+
+def load_instance(seed: str) -> Optional[hanabi.live.hanab_live.HanabLiveInstance]:
+    cur.execute(
+        "SELECT num_players, variant_id "
+        "FROM seeds WHERE seed = %s ",
+        (seed,)
+    )
+    res = cur.fetchone()
+    if res is None:
+        return None
+    (num_players, var_id) = res
+    deck = load_deck(seed)
+    return hanabi.live.hanab_live.HanabLiveInstance(deck, num_players, var_id)
 
 
 def load_game_parts(game_id: int) -> Tuple[hanabi.live.hanab_live.HanabLiveInstance, List[hanabi.hanab_game.Action]]:

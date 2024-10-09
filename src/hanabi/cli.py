@@ -10,8 +10,10 @@ from hanabi.live import check_game
 from hanabi.live import download_data
 from hanabi.live import compress
 from hanabi.live import instance_finder
+from hanabi.hanab_game import GameState
 from hanabi.database import init_database
 from hanabi.database import global_db_connection_manager
+from hanabi.database.games_db_interface import load_instance
 
 """
 Commands supported:
@@ -22,6 +24,16 @@ download single game
 analyze single game
 
 """
+
+def subcommand_show(seed: str):
+    inst = load_instance(seed)
+    if inst is None:
+        logger.info("This seed does not exist in the database")
+        return
+    game = GameState(inst)
+    game.terminate()
+    l = compress.link(game)
+    logger.info("Deck: {}\nReplay Link: {}".format(inst.deck, l))
 
 
 def subcommand_analyze(game_id: int, download: bool = False):
@@ -93,6 +105,13 @@ def subcommand_solve(var_id):
 
 def subcommand_gen_config():
     global_db_connection_manager.create_config_file()
+
+def add_show_seed_subparser(subparsers):
+    parser = subparsers.add_parser(
+        'show',
+        help='Show a seed and output a replay link for it'
+    )
+    parser.add_argument('seed', type=str)
 
 
 def add_init_subparser(subparsers):
@@ -166,6 +185,7 @@ def main_parser() -> argparse.ArgumentParser:
     add_config_gen_subparser(subparsers)
     add_solve_subparser(subparsers)
     add_decompress_subparser(subparsers)
+    add_show_seed_subparser(subparsers)
 
     return parser
 
@@ -178,7 +198,8 @@ def hanabi_cli():
         'download': subcommand_download,
         'gen-config': subcommand_gen_config,
         'solve': subcommand_solve,
-        'decompress': subcommand_decompress
+        'decompress': subcommand_decompress,
+        'show': subcommand_show
     }[args.command]
 
     if args.command != 'gen-config':
