@@ -182,14 +182,12 @@ def solve_unknown_seeds(variant_id, variant_name: Optional[str] = None):
     )
     res = database.cur.fetchall()
     data = []
-    print("processing decks... ", end='')
     for (seed, num_players, suits, ranks) in res:
         assert len(suits) == len(ranks)
         deck = []
         for (suit, rank) in zip(suits, ranks):
             deck.append(hanabi.hanab_game.DeckCard(suit, rank))
         data.append((seed, num_players, deck))
-    print("done.")
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=MAX_PROCESSES) as executor:
         fs = [executor.submit(solve_seed, d[0], d[1], d[2], variant_name) for d in data]
