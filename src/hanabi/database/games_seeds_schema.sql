@@ -12,6 +12,7 @@ CREATE TABLE seeds (
     num_players             SMALLINT    NOT NULL,
     variant_id              SMALLINT    NOT NULL,
     starting_player         SMALLINT    NOT NULL DEFAULT 0,
+    custom                  BOOLEAN     NOT NULL DEFAULT FAlSE,
     feasible                BOOLEAN     DEFAULT NULL,
     max_score_theoretical   SMALLINT
 );
