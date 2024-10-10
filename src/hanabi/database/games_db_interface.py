@@ -8,18 +8,21 @@ from hanabi import logger
 
 from hanabi.database import conn, cur
 
+def get_actions_table_name(cert_game: bool):
+    return "certificate_game_actions" if cert_game else "game_actions"
 
-def store_actions(game_id: int, actions: List[hanabi.hanab_game.Action]):
+
+def store_actions(game_id: int, actions: List[hanabi.hanab_game.Action], cert_game: bool = False):
     vals = []
     for turn, action in enumerate(actions):
         vals.append((game_id, turn, action.type.value, action.target, action.value or 0))
 
     psycopg2.extras.execute_values(
         cur,
-        "INSERT INTO game_actions (game_id, turn, type, target, value) "
+        "INSERT INTO {} (game_id, turn, type, target, value) "
         "VALUES %s "
         "ON CONFLICT (game_id, turn) "
-        "DO NOTHING",
+        "DO NOTHING".format(get_actions_table_name(cert_game)),
         vals
     )
     conn.commit()
@@ -41,10 +44,10 @@ def store_deck_for_seed(seed: str, deck: List[hanabi.hanab_game.DeckCard]):
     conn.commit()
 
 
-def load_actions(game_id: int) -> List[hanabi.hanab_game.Action]:
-    cur.execute("SELECT type, target, value FROM game_actions "
+def load_actions(game_id: int, cert_game: bool = False) -> List[hanabi.hanab_game.Action]:
+    cur.execute("SELECT type, target, value FROM {} "
                 "WHERE game_id = %s "
-                "ORDER BY turn ASC",
+                "ORDER BY turn ASC".format(get_actions_table_name(cert_game)),
                 (game_id,))
     actions = []
     for action_type, target, value in cur.fetchall():
