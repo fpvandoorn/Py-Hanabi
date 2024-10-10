@@ -23,7 +23,7 @@ def get_all_variant_ids() -> List[int]:
     return [var_id for (var_id,) in database.cur.fetchall()]
 
 
-def variant_name(var_id) -> Optional[int]:
+def variant_name(var_id) -> Optional[str]:
     database.cur.execute(
         "SELECT name FROM variants WHERE id = %s",
         (var_id,)
