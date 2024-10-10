@@ -9,6 +9,7 @@ import time
 
 import hanabi.hanab_game
 from hanabi import logger
+from hanabi.hanab_game import GameState
 from hanabi.solvers.sat import solve_sat
 from hanabi import database
 from hanabi.live import download_data
@@ -17,7 +18,7 @@ from hanabi import hanab_game
 from hanabi.solvers import greedy_solver
 from hanabi.solvers import deck_analyzer
 from hanabi.live import variants
-from hanabi.database.games_db_interface import load_deck
+from hanabi.database.games_db_interface import load_deck, load_instance
 
 MAX_PROCESSES = 3
 
@@ -91,12 +92,12 @@ def get_decks_for_all_seeds():
 
 mutex = threading.Lock()
 
-
 def solve_instance(instance: hanab_game.HanabiInstance):
     # first, sanity check on running out of pace
     result = deck_analyzer.analyze(instance)
+#    print(result)
     if len(result) != 0:
-        logger.info("found infeasible deck by foreward analysis")
+        logger.verbose("found infeasible deck by preliminary analysis")
         return False, None, None
     for num_remaining_cards in [0, 20]:
         #        logger.info("trying with {} remaining cards".format(num_remaining_cards))
@@ -130,54 +131,65 @@ def solve_instance(instance: hanab_game.HanabiInstance):
     return a, b, instance.draw_pile_size
 
 
-@pebble.concurrent.process(timeout=150)
-def solve_seed_with_timeout(seed, num_players, deck, var_name: Optional[str] = None):
+
+def solve_seed(seed, num_players, deck, var_name: str, timeout: Optional[int] = 150):
     try:
-        logger.verbose("Starting to solve seed {}".format(seed))
-        t0 = time.perf_counter()
-        solvable, solution, num_remaining_cards = solve_instance(hanab_game.HanabiInstance(deck, num_players))
-        t1 = time.perf_counter()
-        logger.verbose("Solved instance {} in {} seconds: {}".format(seed, round(t1 - t0, 2), solvable))
+        @pebble.concurrent.process(timeout=timeout)
+        def solve_seed_with_timeout(seed, num_players, deck, var_name: Optional[str] = None):
+            try:
+                logger.verbose("Starting to solve seed {}".format(seed))
+                t0 = time.perf_counter()
+                solvable, solution, num_remaining_cards = solve_instance(hanab_game.HanabiInstance(deck, num_players))
+                t1 = time.perf_counter()
+                logger.verbose("Solved instance {} in {} seconds: {}".format(seed, round(t1 - t0, 2), solvable))
 
-        mutex.acquire()
-        if solvable is not None:
-            database.cur.execute("UPDATE seeds SET feasible = (%s) WHERE seed = (%s)", (solvable, seed))
+                mutex.acquire()
+                if solvable is not None:
+                    time_ms = round((t1 - t0) * 1000)
+                    database.cur.execute("UPDATE seeds SET (feasible, solve_time_ms) = (%s, %s) WHERE seed = (%s)",
+                                         (solvable, time_ms, seed))
+                    database.conn.commit()
+                mutex.release()
+
+                if solvable:
+                    logger.verbose("Success with {} cards left in draw by greedy solver on seed {}: {}\n".format(
+                        num_remaining_cards, seed, compress.link(solution))
+                    )
+                elif not solvable:
+                    logger.debug("seed {} was not solvable".format(seed))
+                    logger.debug('{}-player, seed {:10}, {}\n'.format(num_players, seed, var_name))
+                elif solvable is None:
+                    logger.verbose("seed {} skipped".format(seed))
+                else:
+                    raise Exception("Programming Error")
+
+            except Exception as e:
+                print("exception in subprocess:")
+                traceback.print_exc()
+
+        f = solve_seed_with_timeout(seed, num_players, deck, var_name)
+        try:
+            return f.result()
+        except TimeoutError:
+            logger.verbose("Solving on seed {} timed out".format(seed))
+            mutex.acquire()
+            database.cur.execute("UPDATE seeds SET solve_time_ms = %s WHERE seed = (%s)", (1000 * timeout, seed))
             database.conn.commit()
-        mutex.release()
-
-        if solvable == True:
-            logger.verbose("Success with {} cards left in draw by greedy solver on seed {}: {}\n".format(
-                num_remaining_cards, seed, compress.link(solution))
-            )
-        elif solvable == False:
-            logger.debug("seed {} was not solvable".format(seed))
-            logger.debug('{}-player, seed {:10}, {}\n'.format(num_players, seed, var_name))
-        elif solvable is None:
-            logger.verbose("seed {} skipped".format(seed))
-        else:
-            raise Exception("Programming Error")
-
+            mutex.release()
+            return
     except Exception as e:
         print("exception in subprocess:")
         traceback.print_exc()
 
 
-def solve_seed(seed, num_players, deck, var_name: Optional[str] = None):
-    f = solve_seed_with_timeout(seed, num_players, deck, var_name)
-    try:
-        return f.result()
-    except TimeoutError:
-        logger.verbose("Solving on seed {} timed out".format(seed))
-        return
-
-
-def solve_unknown_seeds(variant_id, variant_name: Optional[str] = None):
+def solve_unknown_seeds(variant_id, timeout: Optional[int] = 150):
+    variant_name = variants.variant_name(variant_id)
     database.cur.execute(
         "SELECT seeds.seed, num_players, array_agg(suit_index order by deck_index asc), array_agg(rank order by deck_index asc) "
         "FROM seeds "
         "INNER JOIN decks ON seeds.seed = decks.seed "
-        "WHERE variant_id = (%s) AND feasible IS NULL AND num_players = 2"
-        "GROUP BY seeds.seed ",
+        "WHERE variant_id = (%s) AND num_players = 2 AND class = 1 AND feasible is null "
+        "GROUP BY seeds.seed order by num",
         (variant_id,)
     )
     res = database.cur.fetchall()
@@ -189,8 +201,17 @@ def solve_unknown_seeds(variant_id, variant_name: Optional[str] = None):
             deck.append(hanabi.hanab_game.DeckCard(suit, rank))
         data.append((seed, num_players, deck))
 
+    """
+    with alive_progress.alive_bar(len(res), title='Seed solving on {}'.format(variant_name)) as bar:
+        for d in data:
+            solve_seed(d[0], d[1], d[2], variant_name, timeout)
+            bar()
+    return
+    """
+
+
     with concurrent.futures.ProcessPoolExecutor(max_workers=MAX_PROCESSES) as executor:
-        fs = [executor.submit(solve_seed, d[0], d[1], d[2], variant_name) for d in data]
+        fs = [executor.submit(solve_seed, d[0], d[1], d[2], variant_name, timeout) for d in data]
         with alive_progress.alive_bar(len(res), title='Seed solving on {}'.format(variant_name)) as bar:
             for f in concurrent.futures.as_completed(fs):
                 bar()
