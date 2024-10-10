@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Tuple
 import pebble.concurrent
 import concurrent.futures
 
@@ -18,7 +18,7 @@ from hanabi import hanab_game
 from hanabi.solvers import greedy_solver
 from hanabi.solvers import deck_analyzer
 from hanabi.live import variants
-from hanabi.database.games_db_interface import load_deck, load_instance
+from hanabi.database.games_db_interface import store_actions
 
 MAX_PROCESSES = 3
 
@@ -92,7 +92,7 @@ def get_decks_for_all_seeds():
 
 mutex = threading.Lock()
 
-def solve_instance(instance: hanab_game.HanabiInstance):
+def solve_instance(instance: hanab_game.HanabiInstance)-> Tuple[bool, Optional[GameState], Optional[int]]:
     # first, sanity check on running out of pace
     result = deck_analyzer.analyze(instance)
 #    print(result)
@@ -148,6 +148,12 @@ def solve_seed(seed, num_players, deck, var_name: str, timeout: Optional[int] = 
                     time_ms = round((t1 - t0) * 1000)
                     database.cur.execute("UPDATE seeds SET (feasible, solve_time_ms) = (%s, %s) WHERE seed = (%s)",
                                          (solvable, time_ms, seed))
+                    if solvable:
+                        database.cur.execute("INSERT INTO certificate_games (seed, num_turns) "
+                                             "VALUES (%s, %s) "
+                                             "RETURNING ID ", (seed, len(solution.actions)))
+                        game_id = database.cur.fetchone()[0]
+                        store_actions(game_id, solution.actions, True)
                     database.conn.commit()
                 mutex.release()
 
@@ -201,13 +207,13 @@ def solve_unknown_seeds(variant_id, timeout: Optional[int] = 150):
             deck.append(hanabi.hanab_game.DeckCard(suit, rank))
         data.append((seed, num_players, deck))
 
-    """
+#    """
     with alive_progress.alive_bar(len(res), title='Seed solving on {}'.format(variant_name)) as bar:
         for d in data:
             solve_seed(d[0], d[1], d[2], variant_name, timeout)
             bar()
     return
-    """
+#    """
 
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=MAX_PROCESSES) as executor:
