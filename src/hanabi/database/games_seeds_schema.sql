@@ -12,11 +12,20 @@ CREATE TABLE seeds (
     num_players             SMALLINT    NOT NULL,
     variant_id              SMALLINT    NOT NULL,
     starting_player         SMALLINT    NOT NULL DEFAULT 0,
-    custom                  BOOLEAN     NOT NULL DEFAULT FAlSE,
+    /* Type of seed: 0 is from the website, all other integers are customly generated testsets, arbitrarily ordered into groups */
+    class                   SMALLINT    NOT NULL DEFAULT 0,
+    /* For seeds on the website: Always 0. For custom seeds: Numbered within their class */
+    num                     INT         NOT NULL DEFAULT 0,
     feasible                BOOLEAN     DEFAULT NULL,
+    solved                  BOOLEAN     GENERATED ALWAYS AS ( feasible IS NOT NULL ) STORED,
+    /*
+        If seed solved: Amount of time (in ms) to solve seed.
+        If seed not solved: Maximum amount of time spent on solving before timeout
+    */
+    solve_time_ms           INT          NOT NULL DEFAULT 0,
     max_score_theoretical   SMALLINT
 );
-CREATE INDEX seeds_variant_idx ON seeds (variant_id);
+CREATE INDEX seeds_variant_custom_feasible_idx ON seeds (variant_id, custom, feasible);
 
 
 DROP TABLE IF EXISTS decks CASCADE;
@@ -61,6 +70,16 @@ CREATE INDEX games_seed_score_idx ON games (seed, score);
 CREATE INDEX games_var_seed_idx ON games (variant_id, seed);
 CREATE INDEX games_player_idx ON games (num_players);
 
+/* Example games finishing with max score, not necessarily played by humans. */
+DROP TABLE IF EXISTS certificate_games;
+CREATE TABLE certificate_games (
+    id                      INT      PRIMARY KEY,
+    seed                    TEXT     NOT NULL REFERENCES seeds,
+    num_turns               SMALLINT NOT NULL,
+    min_pace                SMALLINT,
+    num_bdrs                SMALLINT
+);
+CREATE INDEX certificate_games_seed_idx ON games (seed);
 
 
 DROP TABLE IF EXISTS game_participants CASCADE;
@@ -134,6 +153,19 @@ CREATE TABLE game_actions (
 
                               FOREIGN KEY (game_id) REFERENCES games (id) ON DELETE CASCADE,
                               PRIMARY KEY (game_id, turn)
+);
+
+/* Functions the same as game_actions, just for certificate_games instead */
+DROP TABLE IF EXISTS certificate_game_actions CASCADE;
+CREATE TABLE certificate_game_actions (
+    game_id  INTEGER   NOT NULL,
+    turn     SMALLINT  NOT NULL,
+    type     SMALLINT  NOT NULL,
+    target   SMALLINT  NOT NULL,
+    value    SMALLINT  NOT NULL,
+
+    FOREIGN KEY (game_id) REFERENCES certificate_games (id) ON DELETE CASCADE,
+    PRIMARY KEY (game_id, turn)
 );
 
 
