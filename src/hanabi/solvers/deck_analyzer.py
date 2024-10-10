@@ -130,6 +130,10 @@ def analyze(instance: hanab_game.HanabiInstance, only_find_first=False) -> List[
                 ))
                 return reasons
 
+        # In case we can only keep the critical cards exactly, get rid of all others
+        if num_forced_crit_discards == 0:
+            stored_cards = stored_crits
+
         # the last - 1 is there because we have to discard 'next', causing a further draw
         max_remaining_plays = (instance.deck_size - i - 1) + instance.num_players - 1
         needed_plays = instance.max_score - sum(stacks)
