@@ -26,29 +26,29 @@ def get_deck(variant: Variant):
                 deck.append(DeckCard(suit_index, 5))
     return deck
 
-def generate_deck(variant: Variant, num_players: int, seed: int):
+def generate_deck(variant: Variant, num_players: int, seed: int, seed_class: int = 1):
     deck = get_deck(variant)
-    seed = "p{}cs{}".format(num_players, seed)
+    seed = "p{}c{}s{}".format(num_players, seed_class, seed)
     random.seed(seed)
     random.shuffle(deck)
     return seed, deck
 
-def generate_decks_for_variant(variant_id: int, num_players: int, num_seeds: int):
+def generate_decks_for_variant(variant_id: int, num_players: int, num_seeds: int, seed_class: int = 1):
     variant = Variant.from_db(variant_id)
-    for seed in range(num_seeds):
-        seed, deck = generate_deck(variant, num_players, seed)
+    for seed_num in range(num_seeds):
+        seed, deck = generate_deck(variant, num_players, seed_num)
         database.cur.execute(
-            "INSERT INTO seeds (seed, num_players, starting_player, variant_id, custom)"
-            "VALUES (%s, %s, %s, %s, %s)"
+            "INSERT INTO seeds (seed, num_players, starting_player, variant_id, class, num) "
+            "VALUES (%s, %s, %s, %s, %s, %s)"
             "ON CONFLICT (seed) DO NOTHING",
-            (seed, num_players, 0, variant_id, True)
+            (seed, num_players, 0, variant_id, seed_class, seed_num)
         )
         games_db_interface.store_deck_for_seed(seed, deck)
 
 def main():
     database.global_db_connection_manager.read_config()
     database.global_db_connection_manager.connect()
-    generate_decks_for_variant(0, 4, 20000)
+    generate_decks_for_variant(0, 2, 100)
 
 if __name__ == '__main__':
     main()
