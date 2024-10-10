@@ -73,7 +73,7 @@ CREATE INDEX games_player_idx ON games (num_players);
 /* Example games finishing with max score, not necessarily played by humans. */
 DROP TABLE IF EXISTS certificate_games;
 CREATE TABLE certificate_games (
-    id                      INT      PRIMARY KEY,
+    id                      SERIAL   PRIMARY KEY,
     seed                    TEXT     NOT NULL REFERENCES seeds,
     num_turns               SMALLINT NOT NULL,
     min_pace                SMALLINT,
