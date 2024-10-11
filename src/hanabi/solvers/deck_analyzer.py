@@ -158,13 +158,12 @@ def analyze(instance: hanab_game.HanabiInstance, only_find_first=False) -> List[
                 considered_bdr = True
             stored_cards.add(card)
 
-#        logger.verbose("draw pile: {}\nstacks: {}\nstored: {}\nstored crits: {}".format(instance.deck[i+1:], stacks, stored_cards, stored_crits))
-
         hand_size_left_for_crits = instance.num_players * instance.hand_size - len(stored_crits) - 1
 
         # In case we can only keep the critical cards exactly, get rid of all others
         if hand_size_left_for_crits == 0:
-            stored_cards = stored_crits
+            # Note the very important copy here (!)
+            stored_cards = stored_crits.copy()
             squeeze = True
 
         # Use a bool flag to only mark this reason once
