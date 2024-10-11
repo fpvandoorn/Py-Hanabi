@@ -10,25 +10,39 @@ from hanabi.live import compress
 
 
 class InfeasibilityType(Enum):
-    OutOfPace = 0  # idx denotes index of last card drawn before being forced to reduce pace, value denotes how bad pace is
-    OutOfHandSize = 1  # idx denotes index of last card drawn before being forced to discard a crit
-    CritAtBottom = 3
+    Pace                   = 0  # idx denotes index of last card drawn before being forced to reduce pace, value denotes how bad pace is
+    DoubleBottom2With5s    = 1  # same, special case for 2p
+    TripleBottom1With5s    = 2  # same, special case for 2p
+    MultiSuitBdr           = 3
+    PaceAfterSqueeze       = 4
+    HandSize               = 10  # idx denotes index of last card drawn before being forced to discard a crit
+    HandSizeDirect         = 11
+    HandSizeWithSqueeze    = 12
+    HandSizeWithBdr        = 13
+    HandSizeWithBdrSqueeze = 14
+
+    # further reasons, currently not scanned for
+    BottomTopDeck          = 20
+    DoubleBottomTopDeck    = 30
+    CritAtBottom           = 40
 
 
 class InfeasibilityReason:
-    def __init__(self, infeasibility_type: InfeasibilityType, score_upper_bound, value=None):
+    def __init__(self, infeasibility_type: InfeasibilityType, value=None):
         self.type = infeasibility_type
-        self.score_upper_bound = score_upper_bound
         self.value = value
 
+
     def __repr__(self):
+        return "{} ({})".format(self.type, self.value)
         match self.type:
-            case InfeasibilityType.OutOfPace:
-                return "Upper bound {}, since deck runs out of pace after drawing card {}".format(self.score_upper_bound, self.value)
-            case InfeasibilityType.OutOfHandSize:
-                return "Upper bound {}, since deck runs out of hand size after drawing card {}".format(self.score_upper_bound, self.value)
+            case InfeasibilityType.Pace:
+                return "Out of Pace after drawing card {}".format(self.value)
+            case InfeasibilityType.HandSize:
+                return "Out of hand size after drawing card {}".format(self.value)
             case InfeasibilityType.CritAtBottom:
-                return "Upper bound {}, sicne deck has critical non-5 at bottom".format(self.score_upper_bound)
+                return "Critical non-5 at bottom"
+
 
 
 def analyze(instance: hanab_game.HanabiInstance, only_find_first=False) -> List[InfeasibilityReason]:
@@ -54,7 +68,6 @@ def analyze(instance: hanab_game.HanabiInstance, only_find_first=False) -> List[
     if bottom_card.rank != 5 and bottom_card.suitIndex in instance.dark_suits:
         reasons.append(InfeasibilityReason(
             InfeasibilityType.CritAtBottom,
-            instance.max_score - 5 + bottom_card.rank,
             instance.deck_size - 1
         ))
         if only_find_first:
@@ -69,7 +82,7 @@ def analyze(instance: hanab_game.HanabiInstance, only_find_first=False) -> List[
     # If yes, then we also check if we drew r3 earlier and so on.
     # If not, then we keep r2 in our hands
     #
-    # In total, this is equivalent to assuming that we infinitely many clues
+    # In total, this is equivalent to assuming that we have infinitely many clues
     # and infinite storage space in our hands (which is of course not true),
     # but even in this setting, some games are infeasible due to pace issues
     # that we can detect
@@ -78,7 +91,6 @@ def analyze(instance: hanab_game.HanabiInstance, only_find_first=False) -> List[
     # for crit-cards, the usual hand card limit applies.
     # This allows us to detect some seeds where there are simply too many unplayable cards to hold at some point
     # that also can't be discarded
-    # this allows us to detect standard pace issue arguments
 
     stacks = [0] * instance.num_suits
 
@@ -86,11 +98,40 @@ def analyze(instance: hanab_game.HanabiInstance, only_find_first=False) -> List[
     stored_cards = set()
     stored_crits = set()
 
-    min_forced_pace = instance.initial_pace
-    worst_pace_index = 0
+    pace_found = False
+    hand_size_found = False
+    squeeze = False
+    considered_bdr = False
+    artificial_crits = set()
 
-    max_forced_crit_discard = 0
-    worst_crit_index = 0
+    # Investigate BDRs. This catches special cases of Pace losses in 2p, as well as mark some cards critical because
+    # their second copies cannot be used.
+    filtered_deck = [card for card in instance.deck if card.rank != 5]
+    if instance.num_players == 2:
+        if filtered_deck[-1] == filtered_deck[-2] and filtered_deck[-1].rank == 2:
+            reasons.append(InfeasibilityReason(InfeasibilityType.Pace, filtered_deck[-2].deck_index - 1))
+            if only_find_first:
+                return reasons
+            reasons.append(InfeasibilityReason(InfeasibilityType.DoubleBottom2With5s, filtered_deck[-2].deck_index - 1))
+            pace_found = True
+        if filtered_deck[-1] == filtered_deck[-2] and filtered_deck[-2] == filtered_deck[-3] and filtered_deck[-3].rank == 1:
+            reasons.append(InfeasibilityReason(InfeasibilityType.Pace, filtered_deck[-3].deck_index - 1))
+            if only_find_first:
+                return reasons
+            reasons.append(InfeasibilityReason(InfeasibilityType.DoubleBottom2With5s, filtered_deck[-2].deck_index - 1))
+            pace_found = True
+
+        # In 2-player, the second-last card cannot be played if it is a 2
+        if filtered_deck[-2].rank == 2:
+            artificial_crits.add(filtered_deck[-2])
+
+        # In 2-player, in case there is double bottom 3 of the same suit, the card immediately before cannot be played:
+        # After playing that one and drawing the first 3, exactly 3,4,5 of the bottom suit have to be played
+        if filtered_deck[-1] == filtered_deck[-2] and filtered_deck[-2].rank == 3:
+            artificial_crits.add(filtered_deck[-2])
+
+    # Last card in the deck can never be played
+    artificial_crits.add(filtered_deck[-1])
 
     for (i, card) in enumerate(instance.deck):
         if card.rank == stacks[card.suitIndex] + 1:
@@ -110,65 +151,70 @@ def analyze(instance: hanab_game.HanabiInstance, only_find_first=False) -> List[
             pass  # card is trash
         elif card.rank > stacks[card.suitIndex] + 1:
             # need to store card
-            if card in stored_cards or card.rank == 5 or card == instance.deck[-1]:
+            if card in stored_cards or card.rank == 5:
                 stored_crits.add(card)
+            elif card in artificial_crits:
+                stored_crits.add(card)
+                considered_bdr = True
             stored_cards.add(card)
 
+#        logger.verbose("draw pile: {}\nstacks: {}\nstored: {}\nstored crits: {}".format(instance.deck[i+1:], stacks, stored_cards, stored_crits))
 
-        # check for out of handsize (this number can be negative, in which case nothing applies)
-        # Note the +1 at the end, which is there because we have to discard next,
-        # so even if we currently have as many crits as we can hold, we have to discard one
-        num_forced_crit_discards = len(stored_crits) - instance.num_players * instance.hand_size + 1
-        if num_forced_crit_discards > max_forced_crit_discard:
-            worst_crit_index = i
-            max_forced_crit_discard = num_forced_crit_discards
-            if only_find_first:
-                reasons.append(InfeasibilityReason(
-                    InfeasibilityType.OutOfPace,
-                    instance.max_score + min_forced_pace,
-                    worst_pace_index
-                ))
-                return reasons
+        hand_size_left_for_crits = instance.num_players * instance.hand_size - len(stored_crits) - 1
 
         # In case we can only keep the critical cards exactly, get rid of all others
-        if num_forced_crit_discards == 0:
+        if hand_size_left_for_crits == 0:
             stored_cards = stored_crits
+            squeeze = True
+
+        # Use a bool flag to only mark this reason once
+        if hand_size_left_for_crits < 0 and not hand_size_found:
+            reasons.append(InfeasibilityReason(
+                InfeasibilityType.HandSize,
+                i
+            ))
+            if only_find_first:
+                return reasons
+            hand_size_found = True
+
+            # More detailed analysis of loss, categorization only
+            if squeeze:
+                if considered_bdr:
+                    reasons.append(InfeasibilityReason(InfeasibilityType.HandSizeWithBdrSqueeze, i))
+                else:
+                    reasons.append(InfeasibilityReason(InfeasibilityType.HandSizeWithSqueeze, i))
+            else:
+                if considered_bdr:
+                    reasons.append(InfeasibilityReason(InfeasibilityType.HandSizeWithBdr, i))
+                else:
+                    reasons.append(InfeasibilityReason(InfeasibilityType.HandSizeDirect, i))
 
         # the last - 1 is there because we have to discard 'next', causing a further draw
         max_remaining_plays = (instance.deck_size - i - 1) + instance.num_players - 1
         needed_plays = instance.max_score - sum(stacks)
         cur_pace = max_remaining_plays - needed_plays
-        if cur_pace < min(0, min_forced_pace):
-            min_forced_pace = cur_pace
-            worst_pace_index = i
+        if cur_pace < 0 and not pace_found and not hand_size_found:
+            reasons.append(InfeasibilityReason(
+                InfeasibilityType.Pace,
+                i
+            ))
             if only_find_first:
-                reasons.append(InfeasibilityReason(
-                    InfeasibilityType.OutOfPace,
-                    instance.max_score + min_forced_pace,
-                    worst_pace_index
-                ))
                 return reasons
+
+            # We checked single-suit pace losses beforehand (which can only occur in 2p)
+            if squeeze:
+                reasons.append(InfeasibilityReason(InfeasibilityType.PaceAfterSqueeze, i))
+            else:
+                reasons.append(InfeasibilityReason(
+                    InfeasibilityType.MultiSuitBdr,
+                    i
+                ))
+            pace_found = True
 
     # check that we correctly walked through the deck
     assert (len(stored_cards) == 0)
     assert (len(stored_crits) == 0)
     assert (sum(stacks) == instance.max_score)
-
-    if max_forced_crit_discard > 0:
-        reasons.append(
-            InfeasibilityReason(
-                InfeasibilityType.OutOfHandSize,
-                instance.max_score - max_forced_crit_discard,
-                worst_crit_index
-            )
-        )
-
-    if min_forced_pace < 0:
-        reasons.append(InfeasibilityReason(
-            InfeasibilityType.OutOfPace,
-            instance.max_score + min_forced_pace,
-            worst_pace_index
-        ))
 
     return reasons
 
