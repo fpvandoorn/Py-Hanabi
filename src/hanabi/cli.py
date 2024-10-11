@@ -98,8 +98,8 @@ def subcommand_download(
         logger.info("Successfully exported games for all variants")
 
 
-def subcommand_solve(var_id, timeout: int):
-    instance_finder.solve_unknown_seeds(var_id, timeout)
+def subcommand_solve(var_id: int, seed_class: int, num_players: Optional[int], timeout: int, ):
+    instance_finder.solve_unknown_seeds(var_id, seed_class, num_players, timeout)
 
 
 def subcommand_gen_config():
@@ -165,6 +165,8 @@ def add_solve_subparser(subparsers):
     parser = subparsers.add_parser('solve', help='Seed solving')
     parser.add_argument('var_id', type=int, help='Variant id to solve instances from.', default=0)
     parser.add_argument('--timeout', '-t', type=int, help='Timeout [s] for individual seeds.', default=150)
+    parser.add_argument('--class', '-c', type=int, dest='seed_class', help='Class of seed to analyze. 0 stands for hanab.live seeds', default=0)
+    parser.add_argument('--num_players', '-p', type=int, help='Restrict to number of players. If not specified, all player counts are analyzed.', default = None)
 
 def add_decompress_subparser(subparsers):
     parser = subparsers.add_parser('decompress', help='Decompress a hanab.live JSON-encoded replay link')

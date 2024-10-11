@@ -188,15 +188,19 @@ def solve_seed(seed, num_players, deck, var_name: str, timeout: Optional[int] = 
         traceback.print_exc()
 
 
-def solve_unknown_seeds(variant_id, timeout: Optional[int] = 150):
+def solve_unknown_seeds(variant_id, seed_class: int = 0, num_players: Optional[int] = None, timeout: Optional[int] = 150):
     variant_name = variants.variant_name(variant_id)
-    database.cur.execute(
-        "SELECT seeds.seed, num_players, array_agg(suit_index order by deck_index asc), array_agg(rank order by deck_index asc) "
-        "FROM seeds "
-        "INNER JOIN decks ON seeds.seed = decks.seed "
-        "WHERE variant_id = (%s) AND num_players = 2 AND class = 1 AND feasible is null "
-        "GROUP BY seeds.seed order by num",
-        (variant_id,)
+    query = "SELECT seeds.seed, num_players, array_agg(suit_index order by deck_index asc), array_agg(rank order by deck_index asc) "\
+            "FROM seeds "\
+            "INNER JOIN decks ON seeds.seed = decks.seed "\
+            "WHERE variant_id = (%s) "\
+            "AND class = (%s) "\
+            "AND feasible IS NULL "
+    if num_players is not None:
+        query += "AND num_players = {} ".format(num_players)
+    query += "GROUP BY seeds.seed ORDER BY num"
+    database.cur.execute(query,
+        (variant_id, seed_class)
     )
     res = database.cur.fetchall()
     data = []
