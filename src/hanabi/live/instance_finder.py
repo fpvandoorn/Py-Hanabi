@@ -135,7 +135,7 @@ def solve_instance(instance: hanab_game.HanabiInstance)-> Tuple[bool, Optional[G
 def solve_seed(seed, num_players, deck, var_name: str, timeout: Optional[int] = 150):
     try:
         @pebble.concurrent.process(timeout=timeout)
-        def solve_seed_with_timeout(seed, num_players, deck, var_name: Optional[str] = None):
+        def solve_seed_with_timeout(seed, num_players, deck):
             try:
                 logger.verbose("Starting to solve seed {}".format(seed))
                 t0 = time.perf_counter()
@@ -173,7 +173,7 @@ def solve_seed(seed, num_players, deck, var_name: str, timeout: Optional[int] = 
                 print("exception in subprocess:")
                 traceback.print_exc()
 
-        f = solve_seed_with_timeout(seed, num_players, deck, var_name)
+        f = solve_seed_with_timeout(seed, num_players, deck)
         try:
             return f.result()
         except TimeoutError:
@@ -207,17 +207,17 @@ def solve_unknown_seeds(variant_id, timeout: Optional[int] = 150):
             deck.append(hanabi.hanab_game.DeckCard(suit, rank))
         data.append((seed, num_players, deck))
 
-#    """
+    """
     with alive_progress.alive_bar(len(res), title='Seed solving on {}'.format(variant_name)) as bar:
         for d in data:
-            solve_seed(d[0], d[1], d[2], variant_name, timeout)
+            solve_seed(d[0], d[1], d[2], timeout)
             bar()
     return
-#    """
+    """
 
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=MAX_PROCESSES) as executor:
-        fs = [executor.submit(solve_seed, d[0], d[1], d[2], variant_name, timeout) for d in data]
+        fs = [executor.submit(solve_seed, d[0], d[1], d[2], timeout) for d in data]
         with alive_progress.alive_bar(len(res), title='Seed solving on {}'.format(variant_name)) as bar:
             for f in concurrent.futures.as_completed(fs):
                 bar()
