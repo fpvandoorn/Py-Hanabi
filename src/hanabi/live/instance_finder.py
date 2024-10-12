@@ -9,6 +9,8 @@ import alive_progress
 import threading
 import time
 
+import psycopg2.extras
+
 import hanabi.hanab_game
 from hanabi import logger
 from hanabi.hanab_game import GameState
@@ -207,6 +209,16 @@ def process_solve_result(result: SolutionData):
             )
         else:
             logger.debug("seed {} was not solvable".format(result.seed))
+            vals = [(result.seed, reason.type.value, reason.value) for reason in result.infeasibility_reasons]
+            psycopg2.extras.execute_values(
+                database.cur,
+                "INSERT INTO infeasibility_reasons (seed, reason, value) "
+                "VALUES %s "
+                "ON CONFLICT (seed, reason) "
+                "DO UPDATE SET value = EXCLUDED.value",
+                vals
+            )
+            database.conn.commit()
     elif result.skipped:
         logger.verbose("seed {} skipped".format(result.seed))
     else:
@@ -214,19 +226,20 @@ def process_solve_result(result: SolutionData):
     database.conn.commit()
 
 
-def solve_unknown_seeds(variant_id, seed_class: int = 0, num_players: Optional[int] = None, timeout: Optional[int] = 150):
+def solve_unknown_seeds(variant_id, seed_class: int = 0, num_players: Optional[int] = None, timeout: Optional[int] = 150, num_threads: int = 4):
     variant_name = variants.variant_name(variant_id)
     query = "SELECT seeds.seed, num_players, array_agg(suit_index order by deck_index asc), array_agg(rank order by deck_index asc) "\
             "FROM seeds "\
             "INNER JOIN decks ON seeds.seed = decks.seed "\
             "WHERE variant_id = (%s) "\
             "AND class = (%s) "\
-            "AND feasible IS NULL "
+            "AND feasible IS NULL "\
+            "AND solve_time_ms < (%s)"
     if num_players is not None:
         query += "AND num_players = {} ".format(num_players)
     query += "GROUP BY seeds.seed ORDER BY num"
     database.cur.execute(query,
-        (variant_id, seed_class)
+        (variant_id, seed_class, 1000 * timeout)
     )
     res = database.cur.fetchall()
     data = []
@@ -246,7 +259,7 @@ def solve_unknown_seeds(variant_id, seed_class: int = 0, num_players: Optional[i
     """
 
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers=MAX_PROCESSES) as executor:
+    with concurrent.futures.ProcessPoolExecutor(max_workers=num_threads) as executor:
         fs = [executor.submit(solve_seed, d[0], d[1], d[2], timeout) for d in data]
         with alive_progress.alive_bar(len(res), title='Seed solving on {}'.format(variant_name)) as bar:
             for f in concurrent.futures.as_completed(fs):
