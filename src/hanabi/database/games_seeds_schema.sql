@@ -168,20 +168,14 @@ CREATE TABLE certificate_game_actions (
     PRIMARY KEY (game_id, turn)
 );
 
-
-DROP TABLE IF EXISTS score_upper_bounds;
-CREATE TABLE score_upper_bounds (
-    seed              TEXT     NOT NULL REFERENCES seeds ON DELETE CASCADE,
-    score_upper_bound SMALLINT NOT NULL,
+DROP TABLE IF EXISTS infeasibility_reasons;
+CREATE TABLE infeasibility_reasons (
+    seed              TEXT     NOT NULL REFERENCES seeds (seed) ON DELETE CASCADE,
     reason            SMALLINT NOT NULL,
-    UNIQUE (seed, reason)
-);
-
-DROP TABLE IF EXISTS score_lower_bounds;
-CREATE TABLE score_lower_bounds (
-  seed              TEXT NOT NULL REFERENCES seeds ON DELETE CASCADE,
-  score_lower_bound SMALLINT NOT NULL,
-  game_id           INT REFERENCES games ON DELETE CASCADE,
-  actions           TEXT,
-  CHECK (num_nonnulls(game_id, actions) = 1)
+    /*
+    Some value whose meaning depends on the type of reason, for example index when pace loss occurs.
+    Can be null for some reason.
+    */
+    value             SMALLINT,
+    PRIMARY KEY (seed, reason)
 );
