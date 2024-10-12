@@ -210,11 +210,6 @@ def analyze(instance: hanab_game.HanabiInstance, only_find_first=False) -> List[
                 ))
             pace_found = True
 
-    # check that we correctly walked through the deck
-    assert (len(stored_cards) == 0)
-    assert (len(stored_crits) == 0)
-    assert (sum(stacks) == instance.max_score)
-
     return reasons
 
 

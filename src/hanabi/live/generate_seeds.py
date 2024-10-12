@@ -36,7 +36,7 @@ def generate_deck(variant: Variant, num_players: int, seed: int, seed_class: int
 def generate_decks_for_variant(variant_id: int, num_players: int, num_seeds: int, seed_class: int = 1):
     variant = Variant.from_db(variant_id)
     for seed_num in range(num_seeds):
-        seed, deck = generate_deck(variant, num_players, seed_num)
+        seed, deck = generate_deck(variant, num_players, seed_num, seed_class)
         database.cur.execute(
             "INSERT INTO seeds (seed, num_players, starting_player, variant_id, class, num) "
             "VALUES (%s, %s, %s, %s, %s, %s)"
