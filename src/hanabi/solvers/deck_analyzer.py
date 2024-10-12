@@ -1,5 +1,6 @@
 from enum import Enum
 from typing import List
+from dataclasses import dataclass
 
 import alive_progress
 
@@ -25,6 +26,7 @@ class InfeasibilityType(Enum):
     BottomTopDeck          = 20
     DoubleBottomTopDeck    = 30
     CritAtBottom           = 40
+    SAT                    = 50
 
 
 class InfeasibilityReason:
