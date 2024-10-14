@@ -96,13 +96,16 @@ def get_decks_for_all_seeds():
 
 @dataclass
 class SolutionData:
+    infeasibility_reasons: Optional[List[deck_analyzer.InfeasibilityReason]]
     seed: str = None
     time_ms: int = 0
     feasible: Optional[bool] = None
     solution: Optional[GameState] = None
-    infeasibility_reasons: Optional[List[deck_analyzer.InfeasibilityReason]] = None
     num_remaining_cards: Optional[int] = None
     skipped: bool = False
+
+    def __init__(self):
+        self.infeasibility_reasons = []
 
 
 def solve_instance(instance: hanab_game.HanabiInstance)-> SolutionData:
@@ -114,7 +117,7 @@ def solve_instance(instance: hanab_game.HanabiInstance)-> SolutionData:
         retval.feasible = False
         retval.infeasibility_reasons = result
         return retval
-    for num_remaining_cards in [0, 20]:
+    for num_remaining_cards in [0, 10, 20]:
         #        logger.info("trying with {} remaining cards".format(num_remaining_cards))
         game = hanab_game.GameState(instance)
         strat = greedy_solver.GreedyStrategy(game)
@@ -214,8 +217,7 @@ def process_solve_result(result: SolutionData):
                 database.cur,
                 "INSERT INTO infeasibility_reasons (seed, reason, value) "
                 "VALUES %s "
-                "ON CONFLICT (seed, reason) "
-                "DO UPDATE SET value = EXCLUDED.value",
+                "ON CONFLICT (seed, reason) DO NOTHING",
                 vals
             )
             database.conn.commit()
