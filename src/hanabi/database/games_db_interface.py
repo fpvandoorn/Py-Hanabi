@@ -93,7 +93,7 @@ def load_instance(seed: str) -> Optional[hanabi.live.hanab_live.HanabLiveInstanc
     return hanabi.live.hanab_live.HanabLiveInstance(deck, num_players, var_id)
 
 
-def load_game_parts(game_id: int) -> Tuple[hanabi.live.hanab_live.HanabLiveInstance, List[hanabi.hanab_game.Action]]:
+def load_game_parts(game_id: int, cert_game: bool = False) -> Tuple[hanabi.live.hanab_live.HanabLiveInstance, List[hanabi.hanab_game.Action]]:
     """
     Loads information on game from database
     @param game_id: ID of game
@@ -119,7 +119,7 @@ def load_game_parts(game_id: int) -> Tuple[hanabi.live.hanab_live.HanabLiveInsta
     # Unpack results now
     (num_players, seed, one_extra_card, one_less_card, deck_plays, all_or_nothing, clue_starved, variant_name, variant_id, throw_it_in_a_hole) = res
 
-    actions = load_actions(game_id)
+    actions = load_actions(game_id, cert_game)
     deck = load_deck(seed)
 
     instance = hanabi.live.hanab_live.HanabLiveInstance(
@@ -136,8 +136,8 @@ def load_game_parts(game_id: int) -> Tuple[hanabi.live.hanab_live.HanabLiveInsta
     return instance, actions
 
 
-def load_game(game_id: int) -> hanabi.live.hanab_live.HanabLiveGameState:
-    instance, actions = load_game_parts(game_id)
+def load_game(game_id: int, cert_game: bool = False) -> hanabi.live.hanab_live.HanabLiveGameState:
+    instance, actions = load_game_parts(game_id, cert_game)
     game = hanabi.live.hanab_live.HanabLiveGameState(instance)
     for action in actions:
         game.make_action(action)

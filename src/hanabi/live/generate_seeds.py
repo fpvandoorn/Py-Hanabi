@@ -1,8 +1,12 @@
+import hanabi.live.compress
 from hanabi.hanab_game import DeckCard
 from hanabi import database
 from hanabi.live.variants import Variant
 from hanabi.database import games_db_interface
 import random
+
+from src.hanabi.solvers.sat import solve_sat
+
 
 def get_deck(variant: Variant):
     deck = []
@@ -33,6 +37,20 @@ def generate_deck(variant: Variant, num_players: int, seed: int, seed_class: int
     random.shuffle(deck)
     return seed, deck
 
+def link():
+    seed = "p5v0sunblinkingly-kobe-prescriptively"
+
+    deck = database.games_db_interface.load_deck(seed)
+    database.cur.execute("SELECT id FROM certificate_games WHERE seed = %s", (seed,))
+    (game_id, ) = database.cur.fetchone()
+    actions = database.games_db_interface.load_actions(game_id, True)
+    inst = hanabi.hanab_game.HanabiInstance(deck, 5)
+    game = hanabi.hanab_game.GameState(inst)
+    for action in actions:
+        game.make_action(action)
+
+    print(hanabi.live.compress.link(game))
+
 def generate_decks_for_variant(variant_id: int, num_players: int, num_seeds: int, seed_class: int = 1):
     variant = Variant.from_db(variant_id)
     for seed_num in range(num_seeds):
@@ -48,7 +66,8 @@ def generate_decks_for_variant(variant_id: int, num_players: int, num_seeds: int
 def main():
     database.global_db_connection_manager.read_config()
     database.global_db_connection_manager.connect()
-    generate_decks_for_variant(0, 2, 100)
+    link()
+#    generate_decks_for_variant(0, 2, 100)
 
 if __name__ == '__main__':
     main()

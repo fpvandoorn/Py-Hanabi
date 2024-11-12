@@ -1,13 +1,18 @@
+import collections
 from enum import Enum
-from typing import List
+from typing import List, Any, Optional, Tuple
 from dataclasses import dataclass
 
 import alive_progress
 
+import hanabi.hanab_game
 from hanabi import database
 from hanabi import logger
 from hanabi import hanab_game
+from hanabi.hanab_game import DeckCard
 from hanabi.live import compress
+
+from hanabi.database import games_db_interface
 
 
 class InfeasibilityType(Enum):
@@ -21,11 +26,13 @@ class InfeasibilityType(Enum):
     HandSizeWithSqueeze    = 12
     HandSizeWithBdr        = 13
     HandSizeWithBdrSqueeze = 14
+    BottomTopDeck          = 20
 
     # further reasons, currently not scanned for
-    BottomTopDeck          = 20
     DoubleBottomTopDeck    = 30
     CritAtBottom           = 40
+
+    # Default reason when we have nothing else
     SAT                    = 50
 
 
@@ -46,6 +53,77 @@ class InfeasibilityReason:
                 return "Critical non-5 at bottom"
 
 
+def generate_all_choices(l: List[List[Any]]):
+    if len(l) == 0:
+        yield []
+        return
+    head, *tail = l
+    for option in head:
+        for back in generate_all_choices(tail):
+            yield [option] + back
+
+def check_for_top_bottom_deck_loss(instance: hanab_game.HanabiInstance) -> bool:
+    hands = [instance.deck[p * instance.hand_size : (p+1) * instance.hand_size] for p in range(instance.num_players)]
+
+    # scan the deck in reverse order if any card is forced to be late
+    found = {}
+    # Note that only the last 4 cards are relevant for single-suit distribution loss
+    for i, card in enumerate(reversed(instance.deck[-4:])):
+        if card in found.keys():
+            found[card] += 1
+        else:
+            found[card] = 1
+
+        if found[card] >= 3 or (card.rank != 1 and found[card] >= 2):
+            max_rank_starting_extra_round = card.rank + (instance.deck_size - card.deck_index - 2)
+
+            # Next, need to figure out what positions of cards of the same suit are fixed
+            positions_by_rank = [[] for _ in range(6)]
+            for rank in range(max_rank_starting_extra_round, 6):
+                for player, hand in enumerate(hands):
+                    card_test = DeckCard(card.suitIndex, rank)
+                    for card_hand in hand:
+                        if card_test == card_hand:
+                            positions_by_rank[rank].append(player)
+
+
+            # clean up where we have free choice anyway
+            for rank, positions in enumerate(positions_by_rank):
+                if rank != 5 and len(positions) < 2:
+                    positions.clear()
+                if len(positions) == 0:
+                    positions.append(None)
+
+
+
+            # Now, iterate through all choices in starting hands (None stands for free choice of a card) and check them
+            assignment_found = False
+            for assignment in generate_all_choices(positions_by_rank):
+                cur_player = None
+                num_turns = 0
+                for rank in range(max_rank_starting_extra_round, 6):
+                    if cur_player is None or assignment[rank] is None:
+                        num_turns += 1
+                    else:
+                        # Note the -1 and +1 to output things in range [1,5] instead of [0,4]
+                        num_turns += (assignment[rank] - cur_player - 1) % instance.num_players + 1
+
+                    if assignment[rank] is not None:
+                        cur_player = assignment[rank]
+                    elif cur_player is not None:
+                        cur_player = (cur_player + 1) % instance.num_players
+
+                if num_turns <= instance.num_players + 1:
+                    assignment_found = True
+
+            # If no assignment worked out, the deck is infeasible because of this suit
+            if not assignment_found:
+                return True
+
+    # If we reach this point, we checked for every card near the bottom of the deck and found a possible endgame each
+    return False
+
+
 
 def analyze(instance: hanab_game.HanabiInstance, only_find_first=False) -> List[InfeasibilityReason]:
     """
@@ -64,6 +142,12 @@ def analyze(instance: hanab_game.HanabiInstance, only_find_first=False) -> List[
         In particular, if return value is not the empty list, the analyzed instance is unfeasible
     """
     reasons = []
+
+    top_bottom_deck_loss = check_for_top_bottom_deck_loss(instance)
+    if top_bottom_deck_loss:
+        reasons.append(InfeasibilityReason(InfeasibilityType.BottomTopDeck))
+        if only_find_first:
+            return reasons
 
     # check for critical non-fives at bottom of the deck
     bottom_card = instance.deck[-1]
@@ -133,7 +217,8 @@ def analyze(instance: hanab_game.HanabiInstance, only_find_first=False) -> List[
             artificial_crits.add(filtered_deck[-2])
 
     # Last card in the deck can never be played
-    artificial_crits.add(filtered_deck[-1])
+    if instance.deck[-1].rank != 5:
+        artificial_crits.add(instance.deck[-1])
 
     for (i, card) in enumerate(instance.deck):
         if card.rank == stacks[card.suitIndex] + 1:
@@ -240,3 +325,26 @@ def run_on_database(variant_id):
                 )
             bar()
     database.conn.commit()
+
+
+def main():
+    seed = "p5v0sporcupines-underclass-phantasmagorical"
+    seed = 'p5c1s98804'
+    seed = 'p4c1s1116'
+    seed = 'p5c1s14459'
+    num_players = 5
+    database.global_db_connection_manager.read_config()
+    database.global_db_connection_manager.connect()
+
+    database.cur.execute("SELECT seed, num_players FROM seeds WHERE (feasible IS NULL OR feasible = false) AND class = 1 AND num_players = 5")
+#    for (seed, num_players) in database.cur.fetchall():
+    for _ in range(1):
+        deck = database.games_db_interface.load_deck(seed)
+        inst = hanabi.hanab_game.HanabiInstance(deck, num_players)
+        lost =  check_for_top_bottom_deck_loss(inst)
+        if lost:
+            print(seed)
+
+
+if __name__ == "__main__":
+    main()
