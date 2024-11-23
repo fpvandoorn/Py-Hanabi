@@ -328,7 +328,7 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
     constraints = And(*[valid_move(m) for m in range(first_turn, instance.max_winning_moves)], win)
     #    print('Solving instance with {} variables, {} nodes'.format(len(get_atoms(constraints)), get_formula_size(constraints)))
 
-    model = get_model(constraints)
+    model = get_model(constraints, solver_name="z3")
     if model:
         log_model(model, game_state, ls)
         solution = evaluate_model(model, copy.deepcopy(game_state), ls)
