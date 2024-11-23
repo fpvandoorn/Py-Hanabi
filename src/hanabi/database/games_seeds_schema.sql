@@ -25,7 +25,7 @@ CREATE TABLE seeds (
     solve_time_ms           INT          NOT NULL DEFAULT 0,
     max_score_theoretical   SMALLINT
 );
-CREATE INDEX seeds_variant_custom_feasible_idx ON seeds (variant_id, custom, feasible);
+CREATE INDEX seeds_variant_class_feasible_idx ON seeds (variant_id, class, feasible);
 
 
 DROP TABLE IF EXISTS decks CASCADE;
@@ -71,10 +71,10 @@ CREATE INDEX games_var_seed_idx ON games (variant_id, seed);
 CREATE INDEX games_player_idx ON games (num_players);
 
 /* Example games finishing with max score, not necessarily played by humans. */
-DROP TABLE IF EXISTS certificate_games;
+DROP TABLE IF EXISTS certificate_games CASCADE;
 CREATE TABLE certificate_games (
     id                      SERIAL   PRIMARY KEY,
-    seed                    TEXT     NOT NULL REFERENCES seeds,
+    seed                    TEXT     NOT NULL REFERENCES seeds ON DELETE CASCADE,
     num_turns               SMALLINT NOT NULL,
     min_pace                SMALLINT,
     num_bdrs                SMALLINT
@@ -168,7 +168,7 @@ CREATE TABLE certificate_game_actions (
     PRIMARY KEY (game_id, turn)
 );
 
-DROP TABLE IF EXISTS infeasibility_reasons;
+DROP TABLE IF EXISTS infeasibility_reasons CASCADE;
 CREATE TABLE infeasibility_reasons (
     seed              TEXT     NOT NULL REFERENCES seeds (seed) ON DELETE CASCADE,
     reason            SMALLINT NOT NULL,
