@@ -157,7 +157,7 @@ class GreedyStrategy():
         hand_states = [[CardState(card_type(self.game_state, card), card, None) for card in self.game_state.hands[p]]
                        for p in range(self.game_state.num_players)]
 
-        # find dupes in players hands, marke one card crit and the other one trash
+        # find dupes in players hands, mark one card crit and the other one trash
         p = False
         for states in hand_states:
             counter = collections.Counter(map(lambda state: state.card, states))

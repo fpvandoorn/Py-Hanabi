@@ -1,4 +1,5 @@
 import collections
+import dataclasses
 from enum import Enum
 from typing import List, Any, Optional, Tuple, Set
 from dataclasses import dataclass
@@ -139,8 +140,30 @@ def analyze_2p_bottom_loss(instance: hanab_game.HanabiInstance) -> List[Infeasib
     return reasons
 
 
-def analyze_pace_and_hand_size(instance: hanab_game.HanabiInstance, do_squeeze: bool = True) -> List[InfeasibilityReason]:
-    reasons = []
+@dataclass
+class ValueWithIndex:
+    value: int
+    index: int
+    stores_minimum: bool = True
+
+    def update(self, value, index):
+        if (self.stores_minimum and value < self.value) or (not self.stores_minimum and value > self.value):
+            self.value = value
+            self.index = index
+
+    def __repr__(self):
+        return "{} (at {})".format(self.value, self.index)
+
+@dataclass
+class AnalysisResult:
+    infeasibility_reasons: List[InfeasibilityReason] = dataclasses.field(default_factory=lambda: [])
+    min_pace: ValueWithIndex = dataclasses.field(default_factory=lambda: ValueWithIndex(100, 0, True))
+    max_stored_crits: ValueWithIndex = dataclasses.field(default_factory=lambda: ValueWithIndex(0, 0, False))
+    max_stored_cards: ValueWithIndex = dataclasses.field(default_factory=lambda: ValueWithIndex(0, 0, False))
+
+
+def analyze_pace_and_hand_size(instance: hanab_game.HanabiInstance, do_squeeze: bool = True) -> AnalysisResult:
+    reasons = AnalysisResult()
     # we will sweep through the deck and pretend that
     # - we keep all non-trash cards in our hands
     # - we instantly play all playable cards as soon as we have them
@@ -170,6 +193,7 @@ def analyze_pace_and_hand_size(instance: hanab_game.HanabiInstance, do_squeeze: 
     hand_size_found = False
     squeeze = False
     artificial_crits = set()
+
 
     # Investigate BDRs. This catches special cases of Pace losses in 2p, as well as mark some cards critical because
     # their second copies cannot be used.
@@ -223,7 +247,7 @@ def analyze_pace_and_hand_size(instance: hanab_game.HanabiInstance, do_squeeze: 
 
         # Use a bool flag to only mark this reason once
         if hand_size_left_for_crits < 0 and not hand_size_found:
-            reasons.append(InfeasibilityReason(InfeasibilityType.HandSize, card_index))
+            reasons.infeasibility_reasons.append(InfeasibilityReason(InfeasibilityType.HandSize, card_index))
             hand_size_found = True
 
         # the last - 1 is there because we have to discard 'next', causing a further draw
@@ -233,42 +257,46 @@ def analyze_pace_and_hand_size(instance: hanab_game.HanabiInstance, do_squeeze: 
         if cur_pace < 0 and not pace_found:
             if squeeze:
                 # We checked single-suit pace losses beforehand (which can only occur in 2p)
-                reasons.append(InfeasibilityReason(InfeasibilityType.PaceAfterSqueeze, card_index))
+                reasons.infeasibility_reasons.append(InfeasibilityReason(InfeasibilityType.PaceAfterSqueeze, card_index))
             else:
-                reasons.append(InfeasibilityReason(InfeasibilityType.Pace, card_index))
+                reasons.infeasibility_reasons.append(InfeasibilityReason(InfeasibilityType.Pace, card_index))
 
             pace_found = True
+
+#        if card_index != instance.deck_size - 1:
+        reasons.min_pace.update(cur_pace, card_index)
+        reasons.max_stored_cards.update(len(stored_cards), card_index)
+        reasons.max_stored_crits.update(len(stored_crits), card_index)
 
     return reasons
 
 
-def analyze(instance: hanab_game.HanabiInstance) -> List[InfeasibilityReason]:
-    reasons: List[InfeasibilityReason] = []
+def analyze(instance: hanab_game.HanabiInstance) -> AnalysisResult:
+    # Check for pace and hand size problems:
+    result = analyze_pace_and_hand_size(instance)
+    # In case pace ran out after a squeeze from hand size, we want to run a clean pace analysis again
+    if any(map(lambda r: r.type == InfeasibilityType.PaceAfterSqueeze, result.infeasibility_reasons)):
+        result.infeasibility_reasons += analyze_pace_and_hand_size(instance, False).infeasibility_reasons
 
     # Top/bottom deck losses in a single suit.
     top_bottom_deck_loss = check_for_top_bottom_deck_loss(instance)
     if top_bottom_deck_loss is not None:
-        reasons.append(InfeasibilityReason(InfeasibilityType.BottomTopDeck, top_bottom_deck_loss))
+        result.infeasibility_reasons.append(InfeasibilityReason(InfeasibilityType.BottomTopDeck, top_bottom_deck_loss))
 
     # Special cases of pace loss, categorization for 2p only
-    reasons += analyze_2p_bottom_loss(instance)
+    result.infeasibility_reasons += analyze_2p_bottom_loss(instance)
 
     # check for critical non-fives at bottom of the deck
     bottom_card = instance.deck[-1]
     if bottom_card.rank != 5 and bottom_card.suitIndex in instance.dark_suits:
-        reasons.append(InfeasibilityReason(
+        result.infeasibility_reasons.append(InfeasibilityReason(
             InfeasibilityType.CritAtBottom,
             instance.deck_size - 1
         ))
 
-    # Check for pace and hand size problems:
-    reasons += analyze_pace_and_hand_size(instance)
-    # In case pace ran out after a squeeze from hand size, we want to run a clean pace analysis again
-    if any(map(lambda r: r.type == InfeasibilityType.PaceAfterSqueeze, reasons)):
-        reasons += analyze_pace_and_hand_size(instance, False)
-
     # clean up reasons to unique
-    return list(set(reasons))
+    result.infeasibility_reasons = list(set(result.infeasibility_reasons))
+    return result
 
 
 def run_on_database(variant_id):
@@ -281,8 +309,8 @@ def run_on_database(variant_id):
     with alive_progress.alive_bar(total=len(res), title='Check for infeasibility reasons in var {}'.format(variant_id)) as bar:
         for (seed, num_players, deck_str) in res:
             deck = compress.decompress_deck(deck_str)
-            reasons = analyze(hanab_game.HanabiInstance(deck, num_players))
-            for reason in reasons:
+            result = analyze(hanab_game.HanabiInstance(deck, num_players))
+            for reason in result.infeasibility_reasons:
                 database.cur.execute(
                     "INSERT INTO score_upper_bounds (seed, score_upper_bound, reason) "
                     "VALUES (%s,%s,%s) "

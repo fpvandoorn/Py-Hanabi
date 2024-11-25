@@ -112,10 +112,10 @@ def solve_instance(instance: hanab_game.HanabiInstance)-> SolutionData:
     retval = SolutionData()
     # first, sanity check on running out of pace
     result = deck_analyzer.analyze(instance)
-    if len(result) != 0:
+    if len(result.infeasibility_reasons) != 0:
         logger.verbose("found infeasible deck by preliminary analysis")
         retval.feasible = False
-        retval.infeasibility_reasons = result
+        retval.infeasibility_reasons = result.infeasibility_reasons
         return retval
     for num_remaining_cards in [0, 10, 20]:
         #        logger.info("trying with {} remaining cards".format(num_remaining_cards))
