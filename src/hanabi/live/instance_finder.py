@@ -108,10 +108,10 @@ class SolutionData:
         self.infeasibility_reasons = []
 
 
-def solve_instance(instance: hanab_game.HanabiInstance)-> SolutionData:
+def solve_instance(instance: hanab_game.HanabiInstance, list_all_pace_cuts: bool = False)-> SolutionData:
     retval = SolutionData()
     # first, sanity check on running out of pace
-    result = deck_analyzer.analyze(instance)
+    result = deck_analyzer.analyze(instance, list_all_pace_cuts=list_all_pace_cuts)
     if len(result.infeasibility_reasons) != 0:
         logger.verbose("found infeasible deck by preliminary analysis")
         retval.feasible = False
@@ -161,7 +161,7 @@ def solve_instance(instance: hanab_game.HanabiInstance)-> SolutionData:
 
 
 
-def solve_seed(seed, num_players, deck, timeout: Optional[int] = 150) -> SolutionData:
+def solve_seed(seed, num_players, deck, list_all_pace_cuts: bool = False, timeout: Optional[int] = 150) -> SolutionData:
     try:
         @pebble.concurrent.process(timeout=timeout)
         def solve_seed_with_timeout(seed, num_players, deck) -> SolutionData:
@@ -169,7 +169,7 @@ def solve_seed(seed, num_players, deck, timeout: Optional[int] = 150) -> Solutio
                 logger.verbose("Starting to solve seed {}".format(seed))
 
                 t0 = time.perf_counter()
-                retval = solve_instance(hanab_game.HanabiInstance(deck, num_players))
+                retval = solve_instance(hanab_game.HanabiInstance(deck, num_players), list_all_pace_cuts=list_all_pace_cuts)
                 t1 = time.perf_counter()
 
                 retval.seed = seed
@@ -217,7 +217,7 @@ def process_solve_result(result: SolutionData):
                 database.cur,
                 "INSERT INTO infeasibility_reasons (seed, reason, value) "
                 "VALUES %s "
-                "ON CONFLICT (seed, reason) DO NOTHING",
+                "ON CONFLICT (seed, reason, value) DO NOTHING",
                 vals
             )
             database.conn.commit()
@@ -228,7 +228,7 @@ def process_solve_result(result: SolutionData):
     database.conn.commit()
 
 
-def solve_unknown_seeds(variant_id, seed_class: int = 0, num_players: Optional[int] = None, timeout: Optional[int] = 150, num_threads: int = 4):
+def solve_unknown_seeds(variant_id, seed_class: int = 0, num_players: Optional[int] = None, list_all_pace_cuts: bool = False, timeout: Optional[int] = 150, num_threads: int = 4):
     variant_name = variants.variant_name(variant_id)
     query = "SELECT seeds.seed, num_players, array_agg(suit_index order by deck_index asc), array_agg(rank order by deck_index asc) "\
             "FROM seeds "\
@@ -262,7 +262,7 @@ def solve_unknown_seeds(variant_id, seed_class: int = 0, num_players: Optional[i
 
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=num_threads) as executor:
-        fs = [executor.submit(solve_seed, d[0], d[1], d[2], timeout) for d in data]
+        fs = [executor.submit(solve_seed, d[0], d[1], d[2], list_all_pace_cuts, timeout) for d in data]
         with alive_progress.alive_bar(len(res), title='Seed solving on {}'.format(variant_name)) as bar:
             for f in concurrent.futures.as_completed(fs):
                 result = f.result()

@@ -17,7 +17,7 @@ from hanabi.database import games_db_interface
 
 
 class InfeasibilityType(Enum):
-    Pace                   = 0  # idx denotes index of last card drawn before being forced to reduce pace, value denotes how bad pace is
+    Pace                   = 0  # value denotes the number of cards still left in the deck
     DoubleBottom2With5s    = 1  # same, special case for 2p
     TripleBottom1With5s    = 2  # same, special case for 2p
     HandSize               = 10  # idx denotes index of last card drawn before being forced to discard a crit
@@ -162,7 +162,7 @@ class AnalysisResult:
     max_stored_cards: ValueWithIndex = dataclasses.field(default_factory=lambda: ValueWithIndex(0, 0, False))
 
 
-def analyze_pace_and_hand_size(instance: hanab_game.HanabiInstance, do_squeeze: bool = True) -> AnalysisResult:
+def analyze_pace_and_hand_size(instance: hanab_game.HanabiInstance, do_squeeze: bool = True, list_all_pace_cuts: bool = False) -> AnalysisResult:
     reasons = AnalysisResult()
     # we will sweep through the deck and pretend that
     # - we keep all non-trash cards in our hands
@@ -250,16 +250,16 @@ def analyze_pace_and_hand_size(instance: hanab_game.HanabiInstance, do_squeeze: 
             reasons.infeasibility_reasons.append(InfeasibilityReason(InfeasibilityType.HandSize, card_index))
             hand_size_found = True
 
-        # the last - 1 is there because we have to discard 'next', causing a further draw
-        max_remaining_plays = (instance.deck_size - card_index - 1) + instance.num_players - 1
+        max_remaining_plays = (instance.deck_size - card_index - 1) + instance.num_players
         needed_plays = instance.max_score - sum(stacks)
         cur_pace = max_remaining_plays - needed_plays
-        if cur_pace < 0 and not pace_found:
+        if cur_pace <= 0 and (list_all_pace_cuts or (not pace_found)):
             if squeeze:
                 # We checked single-suit pace losses beforehand (which can only occur in 2p)
-                reasons.infeasibility_reasons.append(InfeasibilityReason(InfeasibilityType.PaceAfterSqueeze, card_index))
+                # The value we store is the number of cards still left in the deck
+                reasons.infeasibility_reasons.append(InfeasibilityReason(InfeasibilityType.PaceAfterSqueeze, instance.deck_size - card_index - 1))
             else:
-                reasons.infeasibility_reasons.append(InfeasibilityReason(InfeasibilityType.Pace, card_index))
+                reasons.infeasibility_reasons.append(InfeasibilityReason(InfeasibilityType.Pace, instance.deck_size - card_index - 1))
 
             pace_found = True
 
@@ -271,12 +271,12 @@ def analyze_pace_and_hand_size(instance: hanab_game.HanabiInstance, do_squeeze: 
     return reasons
 
 
-def analyze(instance: hanab_game.HanabiInstance) -> AnalysisResult:
+def analyze(instance: hanab_game.HanabiInstance, list_all_pace_cuts: bool = False) -> AnalysisResult:
     # Check for pace and hand size problems:
-    result = analyze_pace_and_hand_size(instance)
+    result = analyze_pace_and_hand_size(instance, do_squeeze=True, list_all_pace_cuts=list_all_pace_cuts)
     # In case pace ran out after a squeeze from hand size, we want to run a clean pace analysis again
     if any(map(lambda r: r.type == InfeasibilityType.PaceAfterSqueeze, result.infeasibility_reasons)):
-        result.infeasibility_reasons += analyze_pace_and_hand_size(instance, False).infeasibility_reasons
+        result.infeasibility_reasons += analyze_pace_and_hand_size(instance, False, list_all_pace_cuts).infeasibility_reasons
 
     # Top/bottom deck losses in a single suit.
     top_bottom_deck_loss = check_for_top_bottom_deck_loss(instance)
@@ -284,9 +284,10 @@ def analyze(instance: hanab_game.HanabiInstance) -> AnalysisResult:
         result.infeasibility_reasons.append(InfeasibilityReason(InfeasibilityType.BottomTopDeck, top_bottom_deck_loss))
 
     # Special cases of pace loss, categorization for 2p only
-    result.infeasibility_reasons += analyze_2p_bottom_loss(instance)
+    if instance.num_players == 2:
+        result.infeasibility_reasons += analyze_2p_bottom_loss(instance)
 
-    # check for critical non-fives at bottom of the deck
+    # check for critical non-fives at the bottom of the deck
     bottom_card = instance.deck[-1]
     if bottom_card.rank != 5 and bottom_card.suitIndex in instance.dark_suits:
         result.infeasibility_reasons.append(InfeasibilityReason(
@@ -294,12 +295,12 @@ def analyze(instance: hanab_game.HanabiInstance) -> AnalysisResult:
             instance.deck_size - 1
         ))
 
-    # clean up reasons to unique
+    # cleanup reasons to unique
     result.infeasibility_reasons = list(set(result.infeasibility_reasons))
     return result
 
 
-def run_on_database(variant_id):
+def run_on_database(variant_id, list_all_pace_cuts: bool = False):
     database.cur.execute(
         "SELECT seed, num_players, deck FROM seeds WHERE variant_id = (%s) ORDER BY (num_players, seed)",
         (variant_id,)
@@ -309,7 +310,7 @@ def run_on_database(variant_id):
     with alive_progress.alive_bar(total=len(res), title='Check for infeasibility reasons in var {}'.format(variant_id)) as bar:
         for (seed, num_players, deck_str) in res:
             deck = compress.decompress_deck(deck_str)
-            result = analyze(hanab_game.HanabiInstance(deck, num_players))
+            result = analyze(hanab_game.HanabiInstance(deck, num_players), list_all_pace_cuts=list_all_pace_cuts)
             for reason in result.infeasibility_reasons:
                 database.cur.execute(
                     "INSERT INTO score_upper_bounds (seed, score_upper_bound, reason) "
