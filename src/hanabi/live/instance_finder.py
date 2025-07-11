@@ -195,6 +195,12 @@ def solve_seed(seed, num_players, deck, list_all_pace_cuts: bool = False, timeou
         print("exception in subprocess:")
         traceback.print_exc()
 
+def replace_none_with_zero(x):
+    if x is None:
+        return 0
+    else:
+        return x
+
 
 def process_solve_result(result: SolutionData):
     if result.feasible is not None:
@@ -212,12 +218,12 @@ def process_solve_result(result: SolutionData):
             )
         else:
             logger.debug("seed {} was not solvable".format(result.seed))
-            vals = [(result.seed, reason.type.value, reason.value) for reason in result.infeasibility_reasons]
+            vals = [(result.seed, reason.type.value, replace_none_with_zero(reason.index), replace_none_with_zero(reason.value)) for reason in result.infeasibility_reasons]
             psycopg2.extras.execute_values(
                 database.cur,
-                "INSERT INTO infeasibility_reasons (seed, reason, value) "
+                "INSERT INTO infeasibility_reasons (seed, reason, index, value) "
                 "VALUES %s "
-                "ON CONFLICT (seed, reason, value) DO NOTHING",
+                "ON CONFLICT (seed, reason, index) DO NOTHING",
                 vals
             )
             database.conn.commit()

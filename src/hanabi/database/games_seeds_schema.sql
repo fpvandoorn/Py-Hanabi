@@ -172,10 +172,11 @@ DROP TABLE IF EXISTS infeasibility_reasons CASCADE;
 CREATE TABLE infeasibility_reasons (
     seed              TEXT     NOT NULL REFERENCES seeds (seed) ON DELETE CASCADE,
     reason            SMALLINT NOT NULL,
+    index             SMALLINT NOT NULL DEFAULT 0,
     /*
     Some value whose meaning depends on the type of reason, for example number of remaining cards when pace loss occurs.
     Can be null for some reason.
     */
-    value             SMALLINT,
-    UNIQUE (seed, reason, value)
+    value             SMALLINT NOT NULL DEFAULT 0,
+    PRIMARY KEY (seed, reason, index)
 );

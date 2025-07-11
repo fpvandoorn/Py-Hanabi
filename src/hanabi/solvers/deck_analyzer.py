@@ -34,9 +34,10 @@ class InfeasibilityType(Enum):
 
 
 class InfeasibilityReason:
-    def __init__(self, infeasibility_type: InfeasibilityType, value=None):
+    def __init__(self, infeasibility_type: InfeasibilityType, index=None, value=None):
         self.type = infeasibility_type
         self.value = value
+        self.index = index
 
     def __repr__(self):
         match self.type:
@@ -50,10 +51,10 @@ class InfeasibilityReason:
                 return "{} ({})".format(self.type, self.value)
 
     def __eq__(self, other):
-        return self.type == other.type and self.value == other.value
+        return self.type == other.type and self.value == other.value and self.index == other.index
 
     def __hash__(self):
-        return (self.type, self.value).__hash__()
+        return (self.type, self.index, self.value).__hash__()
 
 
 def generate_all_choices(l: List[List[Any]]):
@@ -257,9 +258,9 @@ def analyze_pace_and_hand_size(instance: hanab_game.HanabiInstance, do_squeeze: 
             if squeeze:
                 # We checked single-suit pace losses beforehand (which can only occur in 2p)
                 # The value we store is the number of cards still left in the deck
-                reasons.infeasibility_reasons.append(InfeasibilityReason(InfeasibilityType.PaceAfterSqueeze, instance.deck_size - card_index - 1))
+                reasons.infeasibility_reasons.append(InfeasibilityReason(InfeasibilityType.PaceAfterSqueeze, instance.deck_size - card_index - 1, cur_pace))
             else:
-                reasons.infeasibility_reasons.append(InfeasibilityReason(InfeasibilityType.Pace, instance.deck_size - card_index - 1))
+                reasons.infeasibility_reasons.append(InfeasibilityReason(InfeasibilityType.Pace, instance.deck_size - card_index - 1, cur_pace))
 
             pace_found = True
 
