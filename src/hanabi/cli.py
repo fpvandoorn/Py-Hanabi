@@ -106,6 +106,11 @@ def subcommand_gen_config():
     global_db_connection_manager.create_config_file()
 
 def subcommand_store_solution(seed: str, solution: str):
+    solution = solution.replace("https://", "")
+    solution = solution.replace("http://", "")
+    solution = solution.replace("hanab.live/replay-json/", "")
+    solution = solution.replace("hanab.live/shared-replay-json/", "")
+
     instance = load_instance(seed)
     game = compress.decompress_game_state(solution)
     if not instance == game.instance:
@@ -130,9 +135,9 @@ def subcommand_store_solution(seed: str, solution: str):
                 return
             else:
                 logger.info("Storing additional solution for seed {}.".format(seed))
-        cur.execute("INSERT INTO certificate_games (seed, num_turns) "
-                             "VALUES (%s, %s) "
-                             "RETURNING ID ", (seed, len(actions))
+        cur.execute("INSERT INTO certificate_games (seed, num_turns, source) "
+                             "VALUES (%s, %s, %s) "
+                             "RETURNING ID ", (seed, len(actions), 1)
                     )
         game_id = cur.fetchone()[0]
         cur.execute("UPDATE seeds SET feasible = %s WHERE seed = %s", (True, seed))

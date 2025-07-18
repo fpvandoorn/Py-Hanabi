@@ -77,7 +77,12 @@ CREATE TABLE certificate_games (
     seed                    TEXT     NOT NULL REFERENCES seeds ON DELETE CASCADE,
     num_turns               SMALLINT NOT NULL,
     min_pace                SMALLINT,
-    num_bdrs                SMALLINT
+    num_bdrs                SMALLINT,
+    /* Encodes how this solution was found.
+       0 = computer (might be more detailed later)
+       1 = manual / human-found
+     */
+    source                  SMALLINT NOT NULL DEFAULT 0
 );
 CREATE INDEX certificate_games_seed_idx ON games (seed);
 
