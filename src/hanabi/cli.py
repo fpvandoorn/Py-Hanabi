@@ -11,9 +11,9 @@ from hanabi.live import download_data
 from hanabi.live import compress
 from hanabi.live import instance_finder
 from hanabi.hanab_game import GameState
-from hanabi.database import init_database
+from hanabi.database import init_database, cur, conn
 from hanabi.database import global_db_connection_manager
-from hanabi.database.games_db_interface import load_instance
+from hanabi.database.games_db_interface import load_instance, store_actions
 
 """
 Commands supported:
@@ -105,6 +105,46 @@ def subcommand_solve(var_id: int, seed_class: int, num_players: Optional[int], l
 def subcommand_gen_config():
     global_db_connection_manager.create_config_file()
 
+def subcommand_store_solution(seed: str, solution: str):
+    instance = load_instance(seed)
+    game = compress.decompress_game_state(solution)
+    if not instance == game.instance:
+        logger.error("Specified solution does not match the seed.")
+        return
+    actions = game.actions.copy()
+    game.actions = []
+    try:
+        for action in actions:
+            game.make_action(action)
+    except AssertionError as e:
+        raise ValueError("Specified solution was unable to be decompressed") from e
+
+    if game.is_won():
+        cur.execute("SELECT COUNT(*) FROM certificate_games WHERE seed = %s", (seed,))
+        result = cur.fetchone()[0]
+        if result != 0:
+            logger.info("Seed {} already has a stored solution in the database".format(seed))
+            response = input("Do you wish to store an additional solution? [y/N] ")
+            if response not in ["y", "Y", "yes"]:
+                logger.info("Aborting insertion.")
+                return
+            else:
+                logger.info("Storing additional solution for seed {}.".format(seed))
+        cur.execute("INSERT INTO certificate_games (seed, num_turns) "
+                             "VALUES (%s, %s) "
+                             "RETURNING ID ", (seed, len(actions))
+                    )
+        game_id = cur.fetchone()[0]
+        cur.execute("UPDATE seeds SET feasible = %s WHERE seed = %s", (True, seed))
+        store_actions(game_id, actions, True)
+        conn.commit()
+        logger.info("Successfully stored solution for seed {}".format(seed))
+    else:
+        print(game.actions)
+        print(game.stacks)
+        logger.error("Specified solution is not a valid winning action sequence.")
+
+
 def add_show_seed_subparser(subparsers):
     parser = subparsers.add_parser(
         'show',
@@ -174,6 +214,10 @@ def add_decompress_subparser(subparsers):
     parser = subparsers.add_parser('decompress', help='Decompress a hanab.live JSON-encoded replay link')
     parser.add_argument('game_link', type=str)
 
+def add_store_solution_subparser(subparsers):
+    parser = subparsers.add_parser('store-solution', help='Store a solution for a game')
+    parser.add_argument('seed', type=str)
+    parser.add_argument('solution', type=str)
 
 def main_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -190,6 +234,7 @@ def main_parser() -> argparse.ArgumentParser:
     add_solve_subparser(subparsers)
     add_decompress_subparser(subparsers)
     add_show_seed_subparser(subparsers)
+    add_store_solution_subparser(subparsers)
 
     return parser
 
@@ -203,7 +248,8 @@ def hanabi_cli():
         'gen-config': subcommand_gen_config,
         'solve': subcommand_solve,
         'decompress': subcommand_decompress,
-        'show': subcommand_show
+        'show': subcommand_show,
+        'store-solution': subcommand_store_solution,
     }[args.command]
 
     if args.command != 'gen-config':

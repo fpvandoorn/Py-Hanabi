@@ -173,6 +173,12 @@ class HanabiInstance:
                                  + 8 + (self.num_suits - 1) \
                                  + (-1 if self.num_players >= 5 else 0)
 
+    def __eq__(self, other):
+        return self.deck == other.deck and self.num_players == other.num_players and self.hand_size == other.hand_size \
+        and self.num_strikes == other.num_strikes and self.clue_starved == other.clue_starved and self.fives_give_clue == other.fives_give_clue \
+        and self.deck_plays == other.deck_plays and self.all_or_nothing == other.all_or_nothing and self.starting_player == other.starting_player \
+        and self.num_suits == other.num_suits and self.num_dark_suits == other.num_dark_suits and self.deck_size == other.deck_size \
+
     @property
     def num_dealt_cards(self):
         return self.num_players * self.hand_size

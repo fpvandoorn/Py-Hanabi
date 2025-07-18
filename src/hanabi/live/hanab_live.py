@@ -29,6 +29,11 @@ class HanabLiveInstance(hanab_game.HanabiInstance):
         self.variant_id = variant_id
         self.variant = variants.Variant.from_db(self.variant_id)
 
+    def __eq__(self, other):
+        if not isinstance(other, HanabLiveInstance):
+            return False
+        return self.variant_id == other.variant_id and self.one_less_card == other.one_less_card and self.one_extra_card == other.one_extra_card and super().__eq__(other)
+
 
     @staticmethod
     def select_standard_variant_id(instance: hanab_game.HanabiInstance):
