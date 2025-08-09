@@ -6,19 +6,19 @@ import hanabi.hanab_game
 import hanabi.live.hanab_live
 from hanabi import logger
 
-from hanabi.database import conn, cur
+from hanabi.database import conn as default_conn
+
 
 def get_actions_table_name(cert_game: bool):
     return "certificate_game_actions" if cert_game else "game_actions"
 
-
-def store_actions(game_id: int, actions: List[hanabi.hanab_game.Action], cert_game: bool = False):
+def store_actions(game_id: int, actions: List[hanabi.hanab_game.Action], cert_game: bool = False, conn=default_conn):
     vals = []
     for turn, action in enumerate(actions):
         vals.append((game_id, turn, action.type.value, action.target, action.value or 0))
 
     psycopg2.extras.execute_values(
-        cur,
+        conn.cursor(),
         "INSERT INTO {} (game_id, turn, type, target, value) "
         "VALUES %s "
         "ON CONFLICT (game_id, turn) "
@@ -28,13 +28,13 @@ def store_actions(game_id: int, actions: List[hanabi.hanab_game.Action], cert_ga
     conn.commit()
 
 
-def store_deck_for_seed(seed: str, deck: List[hanabi.hanab_game.DeckCard]):
+def store_deck_for_seed(seed: str, deck: List[hanabi.hanab_game.DeckCard], conn=default_conn):
     vals = []
     for index, card in enumerate(deck):
         vals.append((seed, index, card.suitIndex, card.rank))
 
     psycopg2.extras.execute_values(
-        cur,
+        conn.cursor(),
         "INSERT INTO decks (seed, deck_index, suit_index, rank) "
         "VALUES %s "
         "ON CONFLICT (seed, deck_index) DO UPDATE SET "
@@ -44,7 +44,8 @@ def store_deck_for_seed(seed: str, deck: List[hanabi.hanab_game.DeckCard]):
     conn.commit()
 
 
-def load_actions(game_id: int, cert_game: bool = False) -> List[hanabi.hanab_game.Action]:
+def load_actions(game_id: int, cert_game: bool = False, conn=default_conn) -> List[hanabi.hanab_game.Action]:
+    cur = conn.cursor()
     cur.execute("SELECT type, target, value FROM {} "
                 "WHERE game_id = %s "
                 "ORDER BY turn ASC".format(get_actions_table_name(cert_game)),
@@ -61,7 +62,8 @@ def load_actions(game_id: int, cert_game: bool = False) -> List[hanabi.hanab_gam
     return actions
 
 
-def load_deck(seed: str) -> List[hanabi.hanab_game.DeckCard]:
+def load_deck(seed: str, conn=default_conn) -> List[hanabi.hanab_game.DeckCard]:
+    cur = conn.cursor()
     cur.execute("SELECT deck_index, suit_index, rank FROM decks "
                 "WHERE seed = %s "
                 "ORDER BY deck_index ASC",
@@ -79,7 +81,8 @@ def load_deck(seed: str) -> List[hanabi.hanab_game.DeckCard]:
         raise ValueError(err_msg)
     return deck
 
-def load_instance(seed: str) -> Optional[hanabi.live.hanab_live.HanabLiveInstance]:
+def load_instance(seed: str, conn=default_conn) -> Optional[hanabi.live.hanab_live.HanabLiveInstance]:
+    cur = conn.cursor()
     cur.execute(
         "SELECT num_players, variant_id "
         "FROM seeds WHERE seed = %s ",
@@ -89,16 +92,17 @@ def load_instance(seed: str) -> Optional[hanabi.live.hanab_live.HanabLiveInstanc
     if res is None:
         return None
     (num_players, var_id) = res
-    deck = load_deck(seed)
+    deck = load_deck(seed, conn=conn)
     return hanabi.live.hanab_live.HanabLiveInstance(deck, num_players, var_id)
 
 
-def load_game_parts(game_id: int, cert_game: bool = False) -> Tuple[hanabi.live.hanab_live.HanabLiveInstance, List[hanabi.hanab_game.Action]]:
+def load_game_parts(game_id: int, cert_game: bool = False, conn=default_conn) -> Tuple[hanabi.live.hanab_live.HanabLiveInstance, List[hanabi.hanab_game.Action]]:
     """
     Loads information on game from database
     @param game_id: ID of game
     @return: Instance (i.e. deck + settings) of game, list of actions, variant name
     """
+    cur = conn.cursor()
     cur.execute(
         "SELECT "
         "games.num_players, games.seed, games.one_extra_card, games.one_less_card, games.deck_plays, "
@@ -119,8 +123,8 @@ def load_game_parts(game_id: int, cert_game: bool = False) -> Tuple[hanabi.live.
     # Unpack results now
     (num_players, seed, one_extra_card, one_less_card, deck_plays, all_or_nothing, clue_starved, variant_name, variant_id, throw_it_in_a_hole) = res
 
-    actions = load_actions(game_id, cert_game)
-    deck = load_deck(seed)
+    actions = load_actions(game_id, cert_game, conn=conn)
+    deck = load_deck(seed, conn=conn)
 
     instance = hanabi.live.hanab_live.HanabLiveInstance(
         deck=deck,
@@ -136,8 +140,8 @@ def load_game_parts(game_id: int, cert_game: bool = False) -> Tuple[hanabi.live.
     return instance, actions
 
 
-def load_game(game_id: int, cert_game: bool = False) -> hanabi.live.hanab_live.HanabLiveGameState:
-    instance, actions = load_game_parts(game_id, cert_game)
+def load_game(game_id: int, cert_game: bool = False, conn=default_conn) -> hanabi.live.hanab_live.HanabLiveGameState:
+    instance, actions = load_game_parts(game_id, cert_game, conn=conn)
     game = hanabi.live.hanab_live.HanabLiveGameState(instance)
     for action in actions:
         game.make_action(action)
