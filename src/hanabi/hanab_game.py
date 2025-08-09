@@ -199,6 +199,16 @@ class HanabiInstance:
     def dark_suits(self):
         return list(range(self.num_suits - self.num_dark_suits, self.num_suits))
 
+    def to_json(self):
+        return {
+            'deck': [card.to_json() for card in self.deck],
+            'num_players': self.num_players,
+            'num_suits': self.num_suits,
+            'hand_size': self.hand_size,
+            'max_winning_moves': self.max_winning_moves,
+            'max_score': self.max_score,
+        }
+
 
 class GameState:
     def __init__(self, instance: HanabiInstance):

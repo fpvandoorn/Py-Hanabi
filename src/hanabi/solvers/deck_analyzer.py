@@ -155,12 +155,25 @@ class ValueWithIndex:
     def __repr__(self):
         return "{} (at {})".format(self.value, self.index)
 
+    def to_json(self):
+        return {
+            'value': self.value,
+            'index': self.index
+        }
+
 @dataclass
 class AnalysisResult:
     infeasibility_reasons: List[InfeasibilityReason] = dataclasses.field(default_factory=lambda: [])
     min_pace: ValueWithIndex = dataclasses.field(default_factory=lambda: ValueWithIndex(100, 0, True))
     max_stored_crits: ValueWithIndex = dataclasses.field(default_factory=lambda: ValueWithIndex(0, 0, False))
     max_stored_cards: ValueWithIndex = dataclasses.field(default_factory=lambda: ValueWithIndex(0, 0, False))
+
+    def to_json(self):
+        return {
+            'min_pace': self.min_pace.to_json(),
+            'max_stored_crits': self.max_stored_crits.to_json(),
+            'max_stored_cards': self.max_stored_cards.to_json()
+        }
 
 
 def analyze_pace_and_hand_size(instance: hanab_game.HanabiInstance, do_squeeze: bool = True, list_all_pace_cuts: bool = False) -> AnalysisResult:
