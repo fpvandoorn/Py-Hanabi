@@ -103,17 +103,27 @@ def load_game_parts(game_id: int, cert_game: bool = False, conn=default_conn) ->
     @return: Instance (i.e. deck + settings) of game, list of actions, variant name
     """
     cur = conn.cursor()
-    cur.execute(
-        "SELECT "
-        "games.num_players, games.seed, games.one_extra_card, games.one_less_card, games.deck_plays, "
-        "games.all_or_nothing,"
-        "variants.clue_starved, variants.name, variants.id, variants.throw_it_in_a_hole "
-        "FROM games "
-        "INNER JOIN variants"
-        "  ON games.variant_id = variants.id "
-        "WHERE games.id = %s",
-        (game_id,)
-    )
+    if cert_game:
+        cur.execute(
+            "SELECT "
+            "seeds.num_players, certificate_games.seed "
+            "FROM certificate_games "
+            "INNER JOIN seeds ON seeds.seed = certificate_games.seed "
+            "WHERE certificate_games.id = %s",
+            (game_id,)
+        )
+    else:
+        cur.execute(
+            "SELECT "
+            "games.num_players, games.seed, games.one_extra_card, games.one_less_card, games.deck_plays, "
+            "games.all_or_nothing,"
+            "variants.clue_starved, variants.name, variants.id, variants.throw_it_in_a_hole "
+            "FROM games "
+            "INNER JOIN variants"
+            "  ON games.variant_id = variants.id "
+            "WHERE games.id = %s",
+            (game_id,)
+        )
     res = cur.fetchone()
     if res is None:
         err_msg = "Failed to retrieve game details of game {}.".format(game_id)
@@ -121,7 +131,19 @@ def load_game_parts(game_id: int, cert_game: bool = False, conn=default_conn) ->
         raise ValueError(err_msg)
 
     # Unpack results now
-    (num_players, seed, one_extra_card, one_less_card, deck_plays, all_or_nothing, clue_starved, variant_name, variant_id, throw_it_in_a_hole) = res
+    kwargs = {}
+    if cert_game:
+        (num_players, seed) = res
+        # Certificate games currently only exist for standard variants / settings
+        variant_id = 0
+        clue_starved = False
+        throw_it_in_a_hole = False
+    else:
+        (num_players, seed, one_extra_card, one_less_card, deck_plays, all_or_nothing, clue_starved, variant_name, variant_id, throw_it_in_a_hole) = res
+        kwargs['one_extra_card'] = one_extra_card
+        kwargs['one_less_card'] = one_less_card
+        kwargs['deck_plays'] = deck_plays
+        kwargs['all_or_nothing'] = all_or_nothing
 
     actions = load_actions(game_id, cert_game, conn=conn)
     deck = load_deck(seed, conn=conn)
@@ -130,12 +152,9 @@ def load_game_parts(game_id: int, cert_game: bool = False, conn=default_conn) ->
         deck=deck,
         num_players=num_players,
         variant_id=variant_id,
-        one_extra_card=one_extra_card,
-        one_less_card=one_less_card,
         fives_give_clue=not throw_it_in_a_hole,
-        deck_plays=deck_plays,
-        all_or_nothing=all_or_nothing,
-        clue_starved=clue_starved
+        clue_starved=clue_starved,
+        **kwargs
     )
     return instance, actions
 
