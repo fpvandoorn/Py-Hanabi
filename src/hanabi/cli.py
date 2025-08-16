@@ -110,6 +110,7 @@ def subcommand_store_solution(seed: str, solution: str):
     solution = solution.replace("http://", "")
     solution = solution.replace("hanab.live/replay-json/", "")
     solution = solution.replace("hanab.live/shared-replay-json/", "")
+    solution = solution.replace("hanabi.maximilian-kessler.de/#replay-json/", "")
 
     instance = load_instance(seed)
     game = compress.decompress_game_state(solution)
