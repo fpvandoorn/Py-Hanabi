@@ -1,7 +1,7 @@
 import copy
 from typing import Optional, Tuple
 
-from pysmt.shortcuts import Symbol, Bool, Not, Implies, Iff, And, Or, AtMostOne, get_model, Equals, GE, NotEquals, Int
+from pysmt.shortcuts import Symbol, Bool, Not, Implies, Iff, And, Or, AtMostOne, get_model, Equals, GE, NotEquals, Int, LE
 from pysmt.typing import INT
 
 from hanabi import logger
@@ -33,13 +33,13 @@ class Literals():
         }
 
         # progress[m] = i "after move m the next card drawn from the deck has index i"
-        self.next_draw = {
-            -1: Int(0)
-            , **{
-                m: Symbol('m{}progress'.format(m), INT)
-                for m in range(instance.max_winning_moves)
-            }
-        }
+        # self.next_draw = {
+        #     -1: Int(0)
+        #     , **{
+        #         m: Symbol('m{}progress'.format(m), INT)
+        #         for m in range(instance.max_winning_moves)
+        #     }
+        # }
 
         # strikes[m][i] == "after move m we have at least i strikes"
         self.strikes = {
@@ -133,6 +133,45 @@ class Literals():
         # incr_clues[m] == "at move m we obtain a clue"
         self.incr_clues = {m: Symbol('m{}c+'.format(m)) for m in range(instance.max_winning_moves)}
 
+        ## Variables to (hopefully) improve performance
+
+        # draw_on_or_after[m][i] == "card i is drawn turn m or later" or equivalently "at turn (m-1), the top card of the deck is i or less"
+        self.draw_on_or_after = {
+            **{
+                m: {
+                    **{i: Bool(True) if m <= i - instance.num_dealt_cards else
+                        Bool(False) if instance.max_winning_moves - instance.num_players - m < instance.deck_size - i or i == instance.num_dealt_cards - 1 else
+                        Symbol('m{}draw_on_or_after{}'.format(m, i))
+                        for i in range(instance.num_dealt_cards - 1, instance.deck_size)}
+                }
+                for m in range(-1, instance.max_winning_moves)
+            }
+        }
+
+def max_score(instance: hanab_game.HanabiInstance, i : int) -> int:
+    """returns the max score achievable before card i is drawn"""
+    gotten = { c : [] for c in range(instance.num_suits) }
+
+    for j in range(i):
+        gotten[instance.deck[j].suitIndex] += [instance.deck[j].rank]
+
+    score = 0
+    for c in range(instance.num_suits):
+        notgotten = [r for r in range(1, 6) if r not in gotten[c]]
+        least_notgotten = 6 if notgotten == [] else min(notgotten)
+        score += least_notgotten - 1
+
+    return score
+
+def max_pace(instance: hanab_game.HanabiInstance, i : int) -> int:
+    """returns the max pace at which card i can be drawn"""
+    depth = i - instance.num_dealt_cards # 0-indexed
+    return instance.initial_pace - max(0, depth + 1 - max_score(instance, i))
+
+def min_turn(instance: hanab_game.HanabiInstance, i : int) -> int:
+    """returns the first turn that card i can be drawn"""
+    depth = i - instance.num_dealt_cards # 0-indexed
+    return depth + max(0, depth - max_score(instance, i) - 1) # max-bombs allows - 1
 
 def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, min_pace: Optional[int] = 0) -> Tuple[
     bool, Optional[hanab_game.GameState]]:
@@ -144,6 +183,10 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
         game_state = starting_state
     else:
         raise ValueError("Bad argument type")
+
+    # print(f"{instance.num_dealt_cards}.")
+    # for i in range(instance.deck_size):
+    #     print(f"Drawing card {i} at score <= {max_score(instance, i)}, turn >= {min_turn(instance, i)} and pace <= {max_pace(instance, i)}.")
 
     ls = Literals(instance)
 
@@ -223,8 +266,8 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
                 Equals(ls.clues[m], ls.clues[m - 1])),
 
         # change of progress
-        Implies(ls.draw_any[m], Equals(ls.next_draw[m], ls.next_draw[m-1] + 1)),
-        Implies(Not(ls.draw_any[m]), Equals(ls.next_draw[m], ls.next_draw[m-1])),
+        # Implies(ls.draw_any[m], Equals(ls.next_draw[m], ls.next_draw[m-1] + 1)),
+        # Implies(Not(ls.draw_any[m]), Equals(ls.next_draw[m], ls.next_draw[m-1])),
 
         # change of pace
         Implies(And(ls.discard_any[m], Or(ls.strike[m], Not(ls.play[m]))), Equals(ls.pace[m], ls.pace[m - 1] - 1)),
@@ -248,10 +291,35 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
         # less than 0 clues not allowed
         Implies(Not(ls.discard_any[m]), Or(GE(ls.clues[m - 1], Int(1)), ls.dummyturn[m])),
 
+        # # maybe useful? Doesn't seem to speed-up
+        # *[Or(Not(ls.draw[m][i]), Not(ls.draw[m][j]))
+        #   for j in range(i+1, instance.deck_size)
+        #   for i in range(instance.num_dealt_cards, instance.deck_size)],
+
+        # a card drawn on turn m+ is drawn on turn (m-1)+
+        *[Implies(ls.draw_on_or_after[m][i], ls.draw_on_or_after[m - 1][i])
+          for i in range(instance.num_dealt_cards, instance.deck_size)],
+
+        # card i-1 is drawn on turn (m-1)+ implies that card i is drawn on turn m+
+        *[Implies(ls.draw_on_or_after[m-1][i-1], ls.draw_on_or_after[m][i])
+          for i in range(instance.num_dealt_cards, instance.deck_size)],
+
+        # you draw card i on turn m-1 iff you draw it on turn (m-1)+ but not m+
+        *[Iff(ls.draw[m-1][i], And(ls.draw_on_or_after[m-1][i], Not(ls.draw_on_or_after[m][i])))
+          for i in range(instance.num_dealt_cards, instance.deck_size)],
+
+        # # if you draw card i on turn m, you draw it on turn m+
+        # *[Implies(ls.draw[m][i], ls.draw_on_or_after[m][i])
+        #   for i in range(instance.num_dealt_cards, instance.deck_size)],
+
+        # # if you draw card i on turn m-1, you don't draw it on turn m+
+        # *[Implies(ls.draw[m-1][i], Not(ls.draw_on_or_after[m][i]))
+        #   for i in range(instance.num_dealt_cards, instance.deck_size)],
+
         # we can only draw card i if the last ls.drawn card was i-1
-        *[Implies(ls.draw[m][i], Or(
-            And(ls.draw[m0][i - 1], *[Not(ls.draw_any[m1]) for m1 in range(m0 + 1, m)]) for m0 in
-            range(max(first_turn - 1, m - 9), m))) for i in range(game_state.progress, instance.deck_size)],
+        # *[Implies(ls.draw[m][i], Or(
+        #     And(ls.draw[m0][i - 1], *[Not(ls.draw_any[m1]) for m1 in range(m0 + 1, m)]) for m0 in
+        #     range(max(first_turn - 1, m - 9), m))) for i in range(game_state.progress, instance.deck_size)],
 
         # we can only draw at most one card (NOTE: redundant, FIXME: avoid quadratic formula)
         AtMostOne(ls.draw[m][i] for i in range(game_state.progress, instance.deck_size)),
@@ -305,12 +373,17 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
         # dummy turn bool
         *[Iff(ls.dummyturn[m], Or(ls.dummyturn[m - 1], ls.draw[m - 1 - instance.num_players][instance.deck_size - 1]))
           for i in range(0, 1) if m >= instance.num_players]
+
+
     )
 
     win = And(
         # maximum progress at each color
         *[ls.progress[instance.max_winning_moves - 1][s, 5] for s in range(0, instance.num_suits)],
+    )
 
+    # superfluous constraints that help the solver
+    optimizations = And(
         # played every color/value combination (NOTE: redundant, but makes solving faster)
         *[
             Or(
@@ -322,10 +395,29 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
             for s in range(0, instance.num_suits)
             for r in range(1, 6)
             if r > game_state.stacks[s]
-        ]
+        ],
+
+        # earliest possible draws of cards
+        *[
+            ls.draw_on_or_after[min_turn(instance, i)][i]
+            for i in range(instance.num_dealt_cards, instance.deck_size)
+        ],
+
+        # max_pace
+        *[ Implies(ls.draw[m][i], LE(ls.pace[m], Int(max_pace(instance, i))))
+            for m in range(first_turn, instance.max_winning_moves)
+            for i in range(instance.num_dealt_cards, instance.deck_size)
+        ],
+
+        ## EXTRA CONDITION FOR GAME 2342993. This can be used to check whether
+        ## the SAT-solver can disprove a particular statement.
+        # Not(ls.draw_on_or_after[35][40]),
+        # ls.dummyturn[instance.max_winning_moves - 1]
+        # Not(ls.discard_any[instance.max_winning_moves - 2])
+        # Not(ls.discard[m][i])
     )
 
-    constraints = And(*[valid_move(m) for m in range(first_turn, instance.max_winning_moves)], win)
+    constraints = And(*[valid_move(m) for m in range(first_turn, instance.max_winning_moves)], win, optimizations)
     #    print('Solving instance with {} variables, {} nodes'.format(len(get_atoms(constraints)), get_formula_size(constraints)))
 
     model = get_model(constraints, solver_name="z3")

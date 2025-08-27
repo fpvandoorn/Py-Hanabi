@@ -210,7 +210,7 @@ def add_config_gen_subparser(subparsers):
 def add_solve_subparser(subparsers):
     parser = subparsers.add_parser('solve', help='Seed solving')
     parser.add_argument('var_id', type=int, help='Variant id to solve instances from.', default=0)
-    parser.add_argument('--timeout', '-t', type=int, help='Timeout [s] for individual seeds.', default=150)
+    parser.add_argument('--timeout', '-t', type=int, help='Timeout [s] for individual seeds.', default=3600)
     parser.add_argument('--class', '-c', type=int, dest='seed_class', help='Class of seed to analyze. 0 stands for hanab.live seeds', default=0)
     parser.add_argument('--num_players', '-n', type=int, help='Restrict to number of players. If not specified, all player counts are analyzed.', default = None)
     parser.add_argument('--num_threads', '-p', type=int, help='Number of threads to solve with.', default=4)

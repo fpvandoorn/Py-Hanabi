@@ -14,7 +14,7 @@ dependencies = [
   "pysmt",
   "termcolor",
   "more_itertools",
-  "psycopg2",
+  "psycopg2-binary",
   "alive_progress",
   "argparse",
   "verboselogs",

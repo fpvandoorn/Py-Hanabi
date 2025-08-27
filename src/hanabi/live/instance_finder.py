@@ -203,6 +203,8 @@ def replace_none_with_zero(x):
 
 
 def process_solve_result(result: SolutionData):
+    if result is None:
+        return
     if result.feasible is not None:
         database.cur.execute("UPDATE seeds SET (feasible, solve_time_ms) = (%s, %s) WHERE seed = (%s)",
                              (result.feasible, result.time_ms, result.seed))
