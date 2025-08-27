@@ -1,3 +1,5 @@
+**This is a fork of [https://git.abstractnonsen.se/Hanabi/Py-Hanabi.git].**
+
 # Hanabi-Suite
 
 Disclaimer: This repository is still not in a good cleaned up code style, mainly due to me lacking time to clean stuff up properly.
