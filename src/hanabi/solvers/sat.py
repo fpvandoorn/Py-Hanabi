@@ -1,4 +1,5 @@
 import copy
+import itertools
 from typing import Optional, Tuple
 
 from pysmt.shortcuts import Symbol, Bool, Not, Implies, Iff, And, Or, AtMostOne, get_model, Equals, GE, NotEquals, Int, LE
@@ -17,7 +18,7 @@ class Literals():
     def __init__(self, instance: hanab_game.HanabiInstance):
         # clues[m][i] == "after move m we have i clues", in clue starved, this counts half clues
         self.clues = {
-            -1: Int(16 if instance.clue_starved else 8)  # we have 8 clues after turn
+            -1: Int(instance.max_clues)  # we have 8 clues after turn
             , **{
                 m: Symbol('m{}clues'.format(m), INT)
                 for m in range(instance.max_winning_moves)
@@ -201,8 +202,7 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
         # have to set additional variables
 
         # set initial clues
-        for i in range(0, 10):
-            ls.clues[first_turn - 1] = Int(game_state.clues)
+        ls.clues[first_turn - 1] = Int(game_state.clues)
 
         # set initial pace
         ls.pace[first_turn - 1] = Int(game_state.pace)
@@ -255,7 +255,7 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
 
         # definition of ls.incr_clues
         Iff(ls.incr_clues[m],
-            And(ls.discard_any[m], NotEquals(ls.clues[m - 1], Int(16 if instance.clue_starved else 8)),
+            And(ls.discard_any[m], NotEquals(ls.clues[m - 1], Int(instance.max_clues)),
                 Implies(ls.play[m], ls.play5[m]))),
 
         # change of ls.clues
@@ -282,7 +282,7 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
         # (or not at all) -> Just strike later if neccessary
         # So, we decrease the solution space with this formulation, but do not change whether it's empty or not
         Iff(ls.strike[m],
-            And(ls.discard_any[m], Not(ls.play[m]), Equals(ls.clues[m - 1], Int(16 if instance.clue_starved else 8)))),
+            And(ls.discard_any[m], Not(ls.play[m]), Equals(ls.clues[m - 1], Int(instance.max_clues)))),
 
         # change of strikes
         *[Iff(ls.strikes[m][i], Or(ls.strikes[m - 1][i], And(ls.strikes[m - 1][i - 1], ls.strike[m]))) for i in
@@ -408,6 +408,22 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
             for m in range(first_turn, instance.max_winning_moves)
             for i in range(instance.num_dealt_cards, instance.deck_size)
         ],
+
+        # max-turns constraint: a game with the max number of turns has no strikes,
+        # no 5 played at 8 clues
+        # and the maximum number of 5s (`#suits - (#players + 1) // 5)`) are played
+        # before the final round starts
+        # (`#players + 2` turns before the last possible turn)
+        *[ Or(ls.dummyturn[instance.max_winning_moves - 1], Not(ls.strike[m]))
+            for m in range(first_turn, instance.max_winning_moves)],
+        *[ Or(ls.dummyturn[instance.max_winning_moves - 1], Not(ls.play5[m]),
+              NotEquals(ls.clues[m - 1], Int(instance.max_clues)))
+            for m in range(first_turn, instance.max_winning_moves)],
+        *[ Or(ls.dummyturn[instance.max_winning_moves - 1], *combination)
+                for combination in itertools.combinations(
+                    [ls.progress[instance.max_winning_moves - instance.num_players - 3][s, 5] for s in range(instance.num_suits)],
+                    1 + (instance.num_players + 1) // 5)
+                ],
 
         ## EXTRA CONDITION FOR GAME 2342993. This can be used to check whether
         ## the SAT-solver can disprove a particular statement.

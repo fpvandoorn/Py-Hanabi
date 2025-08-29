@@ -159,6 +159,7 @@ class HanabiInstance:
         self.num_dark_suits = (len(deck) - 10 * self.num_suits) // (-5)
         self.player_names = constants.PLAYER_NAMES[:self.num_players]
         self.deck_size = len(self.deck)
+        self.max_clues = 16 if self.clue_starved else 8
 
         self.initial_pace = self.deck_size - 5 * self.num_suits - self.num_players * (self.hand_size - 1)
 
