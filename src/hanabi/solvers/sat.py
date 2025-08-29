@@ -149,10 +149,9 @@ class Literals():
             }
         }
 
-        # wasting a clue on turn m
-        self.wasted_turn_clue = { m: Symbol('m{}wasted_clue'.format(m)) for m in range(instance.max_winning_moves) }
-        # wasting a clue by not playing a 5 when final round starts
-        self.wasted_suit_clue = { c: Symbol('m{}wasted_suit_clue'.format(c)) for c in range(instance.num_suits) }
+        # number of wasted clues up till turn m
+        self.wasted_clue = { -1: Int(0),
+                             **{m: Symbol('m{}wasted_clue'.format(m), INT) for m in range(instance.max_winning_moves + instance.num_suits)} }
 
 def max_score(instance: hanab_game.HanabiInstance, i : int) -> int:
     """returns the max score achievable before card i is drawn"""
@@ -180,12 +179,45 @@ def min_turn(instance: hanab_game.HanabiInstance, i : int) -> int:
     return depth + max(0, depth - max_score(instance, i) - 1) # max-bombs allows - 1
 
 def game_length_constraints(instance: hanab_game.HanabiInstance, ls : Literals, first_turn, k : int):
-    """The constraints we can add to a `maxlength - k `"""
-    [Iff(ls.wasted_turn_clue, Or(ls.strike[m], And(ls.play5[m], Equals(ls.clues[m - 1], Int(instance.max_clues)))))
-       for m in range(first_turn, instance.max_winning_moves)].append(
-    [Iff(ls.wasted_suit_clue, ls.progress[instance.max_winning_moves - instance.num_players - k - 3][s, 5])
-       for s in range(instance.num_suits)],
-    [])
+    """The constraints we can add to a game of exactly `maxlength - k` turns:
+    at most `k + l` clues can be wasted.
+    Here `l` is the minimum number of 5s that must be played in the last `#players + 1` plays (i.e. `l = 1 + n // 5`).
+    A wasted clue is
+    * a strike
+    * a 5 played at 8 clues
+    * a suit where the 5 has not been played before the final round starts.
+    Possibly we could also add:
+    * clues when the final round starts
+    * number of non-plays in the final round (however, we should be careful to not double count this with suits where the 5 has not been played;
+        in a 5p 56-turn game it is allowed that one player doesn't play in the final round.)
+
+    For `k = 0` we use an encoding that is significantly more efficient (the other one takes 50%-100% longer)
+    """
+    n = instance.num_players
+    nturns = instance.max_winning_moves
+    nsuits = instance.num_suits
+    if k == 0:
+        return \
+        [ Or(ls.dummyturn[instance.max_winning_moves - 1], Not(ls.strike[m]))
+            for m in range(first_turn, instance.max_winning_moves)] + \
+        [ Or(ls.dummyturn[instance.max_winning_moves - 1], Not(ls.play5[m]),
+              NotEquals(ls.clues[m - 1], Int(instance.max_clues)))
+            for m in range(first_turn, instance.max_winning_moves)] + \
+        [ Or(ls.dummyturn[instance.max_winning_moves - 1], *combination)
+                for combination in itertools.combinations(
+                    [ls.progress[instance.max_winning_moves - instance.num_players - 3][s, 5] for s in range(instance.num_suits)],
+                    2 + instance.num_players // 5)]
+    else:
+        return \
+            [Implies(Or(ls.strike[m], And(ls.play5[m], Equals(ls.clues[m - 1], Int(instance.max_clues)))),Equals(ls.wasted_clue[m], ls.wasted_clue[m-1] + 1))
+            for m in range(first_turn, nturns)] + \
+            [Implies(Not(Or(ls.strike[m], And(ls.play5[m], Equals(ls.clues[m - 1], Int(instance.max_clues))))),Equals(ls.wasted_clue[m], ls.wasted_clue[m-1]))
+            for m in range(first_turn, nturns)] + \
+            [Implies(ls.progress[nturns - n - 3 - k][s, 5],Equals(ls.wasted_clue[nturns + s], ls.wasted_clue[nturns + s - 1]))
+            for s in range(nsuits)] + \
+            [Implies(Not(ls.progress[nturns - n - 3 - k][s, 5]),Equals(ls.wasted_clue[nturns + s], ls.wasted_clue[nturns + s - 1] + 1))
+            for s in range(nsuits)] + \
+            [Implies(And(Not(ls.dummyturn[nturns - 1 - k]), ls.dummyturn[nturns - k]), LE(ls.wasted_clue[nturns + nsuits - 1], Int(k + 1 + n // 5)))]
 
 def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, min_pace: Optional[int] = 0) -> Tuple[
     bool, Optional[hanab_game.GameState]]:
@@ -242,6 +274,7 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
         for s in range(0, game_state.num_suits):
             for r in range(0, 6):
                 ls.progress[first_turn - 1][s, r] = Bool(r <= game_state.stacks[s])
+
 
     ### Now, model all valid moves
 
@@ -422,30 +455,23 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
             for i in range(instance.num_dealt_cards, instance.deck_size)
         ],
 
-        # max-turns constraint: a game with the max number of turns has no strikes,
-        # no 5 played at 8 clues
-        # and the maximum number of 5s (`#suits - (#players + 1) // 5)`) are played
-        # before the final round starts
-        # (`#players + 2` turns before the last possible turn)
-        *[ Or(ls.dummyturn[instance.max_winning_moves - 1], Not(ls.strike[m]))
-            for m in range(first_turn, instance.max_winning_moves)],
-        *[ Or(ls.dummyturn[instance.max_winning_moves - 1], Not(ls.play5[m]),
-              NotEquals(ls.clues[m - 1], Int(instance.max_clues)))
-            for m in range(first_turn, instance.max_winning_moves)],
-        *[ Or(ls.dummyturn[instance.max_winning_moves - 1], *combination)
-                for combination in itertools.combinations(
-                    [ls.progress[instance.max_winning_moves - instance.num_players - 3][s, 5] for s in range(instance.num_suits)],
-                    1 + (instance.num_players + 1) // 5)
-                ],
+        # max-turns constraint: we can add extra conditions on a game at almost the maximum number of turns
+        *game_length_constraints(instance, ls, first_turn, 0),
+        *game_length_constraints(instance, ls, first_turn, 1),
 
-        # more general high-turn game constraints
 
-        ## EXTRA CONDITION FOR GAME 2342993. This can be used to check whether
+        ## EXTRA CONDITION. This can be used to check whether
         ## the SAT-solver can disprove a particular statement.
         # Not(ls.draw_on_or_after[35][40]),
-        # Not(ls.dummyturn[instance.max_winning_moves - 1])
-        # Not(ls.discard_any[instance.max_winning_moves - 2])
-        # Not(ls.discard[m][i])
+        # Not(ls.dummyturn[instance.max_winning_moves - 1]),
+        # ls.dummyturn[instance.max_winning_moves - 2],
+        # ls.progress[44][1, 4],
+        # ls.progress[1][0, 1],
+        # Not(ls.discard[51][6]),
+        # Not(ls.discard[50][0]),
+        # ls.play[51],
+        # Not(ls.discard_any[instance.max_winning_moves - 2]),
+        # Not(ls.discard[m][i]),
     )
 
     constraints = And(*[valid_move(m) for m in range(first_turn, instance.max_winning_moves)], win, optimizations)
