@@ -149,6 +149,11 @@ class Literals():
             }
         }
 
+        # wasting a clue on turn m
+        self.wasted_turn_clue = { m: Symbol('m{}wasted_clue'.format(m)) for m in range(instance.max_winning_moves) }
+        # wasting a clue by not playing a 5 when final round starts
+        self.wasted_suit_clue = { c: Symbol('m{}wasted_suit_clue'.format(c)) for c in range(instance.num_suits) }
+
 def max_score(instance: hanab_game.HanabiInstance, i : int) -> int:
     """returns the max score achievable before card i is drawn"""
     gotten = { c : [] for c in range(instance.num_suits) }
@@ -173,6 +178,14 @@ def min_turn(instance: hanab_game.HanabiInstance, i : int) -> int:
     """returns the first turn that card i can be drawn"""
     depth = i - instance.num_dealt_cards # 0-indexed
     return depth + max(0, depth - max_score(instance, i) - 1) # max-bombs allows - 1
+
+def game_length_constraints(instance: hanab_game.HanabiInstance, ls : Literals, first_turn, k : int):
+    """The constraints we can add to a `maxlength - k `"""
+    [Iff(ls.wasted_turn_clue, Or(ls.strike[m], And(ls.play5[m], Equals(ls.clues[m - 1], Int(instance.max_clues)))))
+       for m in range(first_turn, instance.max_winning_moves)].append(
+    [Iff(ls.wasted_suit_clue, ls.progress[instance.max_winning_moves - instance.num_players - k - 3][s, 5])
+       for s in range(instance.num_suits)],
+    [])
 
 def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, min_pace: Optional[int] = 0) -> Tuple[
     bool, Optional[hanab_game.GameState]]:
@@ -425,10 +438,12 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
                     1 + (instance.num_players + 1) // 5)
                 ],
 
+        # more general high-turn game constraints
+
         ## EXTRA CONDITION FOR GAME 2342993. This can be used to check whether
         ## the SAT-solver can disprove a particular statement.
         # Not(ls.draw_on_or_after[35][40]),
-        # ls.dummyturn[instance.max_winning_moves - 1]
+        # Not(ls.dummyturn[instance.max_winning_moves - 1])
         # Not(ls.discard_any[instance.max_winning_moves - 2])
         # Not(ls.discard[m][i])
     )
