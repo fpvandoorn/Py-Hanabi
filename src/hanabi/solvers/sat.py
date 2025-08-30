@@ -153,30 +153,49 @@ class Literals():
         self.wasted_clue = { -1: Int(0),
                              **{m: Symbol('m{}wasted_clue'.format(m), INT) for m in range(instance.max_winning_moves + instance.num_suits)} }
 
-def max_score(instance: hanab_game.HanabiInstance, i : int) -> int:
-    """returns the max score achievable before card i is drawn"""
+def max_scores(instance: hanab_game.HanabiInstance, i : int):
+    """returns the max scores achievable before card i is drawn"""
     gotten = { c : [] for c in range(instance.num_suits) }
 
     for j in range(i):
         gotten[instance.deck[j].suitIndex] += [instance.deck[j].rank]
 
-    score = 0
+    max_plays = []
     for c in range(instance.num_suits):
         notgotten = [r for r in range(1, 6) if r not in gotten[c]]
-        least_notgotten = 6 if notgotten == [] else min(notgotten)
-        score += least_notgotten - 1
-
-    return score
+        max_plays += [5 if notgotten == [] else min(notgotten) - 1]
+    return max_plays
 
 def max_pace(instance: hanab_game.HanabiInstance, i : int) -> int:
     """returns the max pace at which card i can be drawn"""
     depth = i - instance.num_dealt_cards # 0-indexed
-    return instance.initial_pace - max(0, depth + 1 - max_score(instance, i))
+    return instance.initial_pace - max(0, depth + 1 - sum(max_scores(instance, i)))
 
-def min_turn(instance: hanab_game.HanabiInstance, i : int) -> int:
-    """returns the first turn that card i can be drawn"""
+def pace_constraints(instance: hanab_game.HanabiInstance, ls : Literals, first_turn):
+    """constaints we can derive from pace considerations."""
+    return \
+        [ Implies(ls.draw[m][i], LE(ls.pace[m], Int(max_pace(instance, i))))
+                for i in range(instance.num_dealt_cards, instance.deck_size)
+                for m in range(first_turn, instance.max_winning_moves) ] + \
+        [ Implies(ls.draw[m][i], ls.progress[m][c, max_scores(instance, i)[c] - max_pace(instance, i)])
+                for i in range(instance.num_dealt_cards, instance.deck_size)
+                for c in range(instance.num_suits)
+                for m in range(first_turn, instance.max_winning_moves)
+                if max_scores(instance, i)[c] > max_pace(instance, i)]
+
+def min_turn(instance: hanab_game.HanabiInstance, i : int, total_turns = None) -> int:
+    """returns the first turn that card i can be drawn.
+    When `turns` is not None, this is computed for a game that has at most `turns`
+    fewer total turns than the maximum possible length."""
     depth = i - instance.num_dealt_cards # 0-indexed
-    return depth + max(0, depth - max_score(instance, i) - 1) # max-bombs allows - 1
+    scores = max_scores(instance, i)
+    score = sum(scores)
+    possible_fiveplays = scores.count(5)
+    # minimum number of 5s that have to be played
+    minimum_fiveplays = max(0, possible_fiveplays - max_pace(instance, i))
+    # (minimum number of) clues gotten from 5s minus number of misplays
+    clues_modifier = -2 if total_turns is None else max(-2, minimum_fiveplays - total_turns)
+    return depth + max(0, depth + 1 - score + clues_modifier)
 
 def game_length_constraints(instance: hanab_game.HanabiInstance, ls : Literals, first_turn, k : int):
     """The constraints we can add to a game of exactly `maxlength - k` turns:
@@ -445,29 +464,40 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
 
         # earliest possible draws of cards
         *[
-            ls.draw_on_or_after[min_turn(instance, i)][i]
+            ls.draw_on_or_after[min_turn(instance, i, None)][i]
             for i in range(instance.num_dealt_cards, instance.deck_size)
         ],
 
-        # max_pace
-        *[ Implies(ls.draw[m][i], LE(ls.pace[m], Int(max_pace(instance, i))))
-            for m in range(first_turn, instance.max_winning_moves)
-            for i in range(instance.num_dealt_cards, instance.deck_size)
-        ],
+        # pace constraints
+        *pace_constraints(instance, ls, first_turn),
 
         # max-turns constraint: we can add extra conditions on a game at almost the maximum number of turns
         *game_length_constraints(instance, ls, first_turn, 0),
         *game_length_constraints(instance, ls, first_turn, 1),
 
+        # earliest possible draws of cards if (almost) max turns
+        *[
+            Or(ls.dummyturn[instance.max_winning_moves - 1 - k], ls.draw_on_or_after[min_turn(instance, i, k)][i])
+            for i in range(instance.num_dealt_cards, instance.deck_size)
+            for k in range(2)
+        ],
 
         ## EXTRA CONDITION. This can be used to check whether
         ## the SAT-solver can disprove a particular statement.
-        # Not(ls.draw_on_or_after[35][40]),
-        # Not(ls.dummyturn[instance.max_winning_moves - 1]),
-        # ls.dummyturn[instance.max_winning_moves - 2],
+        # Not(ls.draw_on_or_after[27][39]),
+        # Not(ls.dummyturn[instance.max_winning_moves - 4]),
+        # ls.dummyturn[instance.max_winning_moves - 4],
+        # Not(ls.draw_on_or_after[15][32]), #easy
+        # Not(ls.draw_on_or_after[20][37]), #easy
+        Not(ls.draw_on_or_after[25][39]), # to do this, we need to encode "score >= k when card i is drawn" in a variable.
         # ls.progress[44][1, 4],
         # ls.progress[1][0, 1],
-        # Not(ls.discard[51][6]),
+        # Not(ls.discard[49][18]),
+        # ls.discard[49][18],
+        # Not(ls.discard[48][38]),
+        # Not(ls.discard[48][42]),
+        # Not(ls.discard[47][38]),
+        # Not(ls.discard[47][42]),
         # Not(ls.discard[50][0]),
         # ls.play[51],
         # Not(ls.discard_any[instance.max_winning_moves - 2]),
