@@ -20,7 +20,7 @@ class Literals():
         # clues_gt[m, i] == "after move m we have more than i clues", in clue starved, this counts half clues
         self.clues_gt = {
             (m, i) : vpool.id(f"m{m}clues_gt{i}")
-            for i in range(-instance.clue_cost, instance.max_clues)
+            for i in range(-instance.clue_cost, instance.max_clues + 1)
             for m in range(-1, instance.max_winning_moves)
         }
 
@@ -232,20 +232,15 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
     # boundary conditions
 
     # start with 8 clues
-    for i in range(-instance.clue_cost, instance.max_clues - 1):
+    for i in range(-instance.clue_cost, instance.max_clues):
         cnf.append([ls.clues_gt[-1, i]])
-    # if you have `> i + 1` clues, you have `> i` clues
-    for m in range(instance.max_winning_moves):
-        for i in range(-instance.clue_cost, instance.max_clues - 1):
-            cnf.append([-ls.clues_gt[m, i + 1], ls.clues_gt[m, i]])
+    # cannot have > 8 clues.
+    for m in range(-1, instance.max_winning_moves):
+        cnf.append([-ls.clues_gt[m, instance.max_clues]])
 
     # start with 0 strikes
     for i in range(instance.num_strikes):
         cnf.append([-ls.strikes_gt[-1, i]])
-    # if you have `> i + 1` strikes, you have `> i` strikes
-    for m in range(instance.max_winning_moves):
-        for i in range(instance.num_strikes - 1):
-            cnf.append([-ls.strikes_gt[m, i + 1], ls.strikes_gt[m, i]])
 
     # first few turns are not extra turns / dummy turns
     for m in range(instance.draw_pile_size):
@@ -255,21 +250,17 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
 
     # no cards can be played before turn 0
     for i in range(instance.deck_size):
-        cnf.append([-ls.use_le[0, i]])
-
+        cnf.append([-ls.use_le[-1, i]])
 
     # initial cards are drawn before turn 0
     cnf.append([-ls.draw_ge[0, instance.num_dealt_cards - 1]])
 
     # other cards cannot be drawn too early
+    # here we assume that all cards are drawn, which is not an issue
+    # (we don't even stop the game at max score)
     for m in range(instance.deck_size - instance.num_dealt_cards):
         for i in range(instance.num_dealt_cards + m, instance.deck_size):
             cnf.append([ls.draw_ge[m, i]])
-
-    # cards cannot be drawn too late
-    # for m in range(instance.max_winning_moves):
-    #     for i in range(instance.num_dealt_cards, instance.deck_size - max(0, instance.max_winning_moves - instance.num_players - m)):
-    #         cnf.append([-ls.draw_ge[m, i]])
 
     # if i is drawn at turn `>= m+1`, then it is drawn at turn `>= m`
     for m in range(instance.max_winning_moves - 1):
@@ -353,6 +344,7 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
 
     ### Now, model all valid moves
 
+    # for m in range(30):
     for m in range(instance.max_winning_moves):
         # in dummy turns, we assume you clue
         cnf.append([-ls.dummyturn[m], ls.clue[m]])
@@ -384,20 +376,19 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
 
         # definition of incr_clues
         cnf.append([-ls.incr_clues[m], -ls.clue[m]])
-        cnf.append([-ls.incr_clues[m], -ls.clues_gt[m, instance.max_clues - 1]])
+        cnf.append([-ls.incr_clues[m], -ls.clues_gt[m - 1, instance.max_clues - 1]])
         cnf.append([-ls.incr_clues[m], -ls.play[m], ls.play5[m]])
-        cnf.append([ls.incr_clues[m], ls.clue[m], ls.clues_gt[m, instance.max_clues - 1], ls.play[m]])
-        cnf.append([ls.incr_clues[m], ls.clue[m], ls.clues_gt[m, instance.max_clues - 1], -ls.play5[m]])
+        cnf.append([ls.incr_clues[m], ls.clue[m], ls.clues_gt[m - 1, instance.max_clues - 1], ls.play[m]])
+        cnf.append([ls.incr_clues[m], ls.clue[m], ls.clues_gt[m - 1, instance.max_clues - 1], -ls.play5[m]])
 
-        for i in range(instance.max_clues - 1):
+        # if you have `> i + 1` clues, you have `> i` clues
+        for i in range(-instance.clue_cost, instance.max_clues):
             cnf.append([-ls.clues_gt[m, i + 1], ls.clues_gt[m, i]])
 
         # clues are always nonnegative
         cnf.append([ls.clues_gt[m, -1]])
-        # if you clue, you cannot have max clues anymore.
-        cnf.append([-ls.clue[m], ls.dummyturn[m], -ls.clues_gt[m, instance.max_clues - instance.clue_cost]])
         # change of clues
-        for i in range(instance.max_clues):
+        for i in range(instance.max_clues + 1):
             cnf.append([-ls.clues_gt[m - 1, i], ls.clues_gt[m, i - instance.clue_cost]]) # -ls.clue[m], ls.dummyturn[m],
             cnf.append([-ls.clue[m], ls.dummyturn[m], ls.clues_gt[m - 1, i], -ls.clues_gt[m, i - instance.clue_cost]])
             cnf.append([-ls.incr_clues[m], -ls.clues_gt[m - 1, i - 1], ls.clues_gt[m, i]])
@@ -412,14 +403,21 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
         # It's easy to see that if there is any solution to the instance, then there is also one where we only strike at 8 clues
         # (or not at all) -> Just strike later if neccessary
         # So, we decrease the solution space with this formulation, but do not change whether it's empty or not
+
+        # Note(F): I don't think we encode that strikes cannot happen with playable cards, but that should also preserve playability.
         cnf.append([-ls.strike[m], -ls.clue[m]])
         cnf.append([-ls.strike[m], -ls.play[m]])
-        cnf.append([-ls.strike[m], ls.clues_gt[m, instance.max_clues - 1]])
-        cnf.append([ls.strike[m], ls.clue[m], ls.play[m], -ls.clues_gt[m, instance.max_clues - 1]])
+        cnf.append([-ls.strike[m], ls.clues_gt[m - 1, instance.max_clues - 1]])
+        cnf.append([ls.strike[m], ls.clue[m], ls.play[m], -ls.clues_gt[m - 1, instance.max_clues - 1]])
+
+        # if you have `> i + 1` strikes, you have `> i` strikes
+        for i in range(instance.num_strikes - 1):
+            cnf.append([-ls.strikes_gt[m, i + 1], ls.strikes_gt[m, i]])
 
         # cannot have max strikes
         cnf.append([-ls.strikes_gt[m, instance.num_strikes - 1]])
         # change of strikes
+        cnf.append([-ls.strike[m], ls.strikes_gt[m, 0]])
         for i in range(instance.num_strikes - 1):
             cnf.append([-ls.strikes_gt[m - 1, i], ls.strikes_gt[m, i]])
             cnf.append([ls.strikes_gt[m - 1, i], -ls.strikes_gt[m, i + 1]])
@@ -435,16 +433,16 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
                 cnf.append([-ls.draw[m, i], -ls.draw_ge[m+1, i]])
                 cnf.append([ls.draw[m, i], -ls.draw_ge[m, i], ls.draw_ge[m+1, i]])
 
-        # we can only use a card if we drew it earlier...
-        for i in range(game_state.progress, instance.deck_size):
-            cnf.append([-ls.use[m, i]] + [ls.draw[m0, i] for m0 in range(m - instance.num_players, first_turn - 1, -instance.num_players)])
-
         # definition of use and use_le
         for i in range(instance.deck_size):
             cnf.append([-ls.use[m, i], ls.use_le[m, i]])
             cnf.append([-ls.use[m, i], -ls.use_le[m-1, i]])
             cnf.append([-ls.use_le[m-1, i], ls.use_le[m, i]])
             cnf.append([ls.use[m, i], ls.use_le[m-1, i], -ls.use_le[m, i]])
+
+        # we can only use a card if we drew it earlier...
+        for i in range(game_state.progress, instance.deck_size):
+            cnf.append([-ls.use[m, i]] + [ls.draw[m0, i] for m0 in range(m - instance.num_players, first_turn - 1, -instance.num_players)])
 
         # ...or if it was part of the initial hand
         for i in range(game_state.progress):
@@ -470,7 +468,7 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
                     [ls.use[m, i] for i in range(instance.deck_size) if instance.deck[i] == hanab_game.DeckCard(s, r)])
 
         # we can only play a card if it matches the progress, and that advances the progress
-        # (we could add a clause with `ls.progress[m - 1, s, r - 1`, but that can be derived from this)
+        # (we could add a clause with `ls.progress[m - 1, s, r - 1]`, but that can be derived from this)
         for i in range(instance.deck_size):
             cnf.append([-ls.use[m, i], -ls.play[m], -ls.progress[m - 1, instance.deck[i].suitIndex, instance.deck[i].rank]])
             cnf.append([-ls.use[m, i], -ls.play[m], ls.progress[m, instance.deck[i].suitIndex, instance.deck[i].rank]])
@@ -503,10 +501,16 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
         # (From this it follows that if you have pace `>= i + 1`, you have pace `>= i`)
 
         # pace is nonnegative
-        cnf.append([ls.pace_gt[m, 0]])
+        cnf.append([ls.pace_gt[m, 0], ls.extraturn[m]])
+        if m <= 34:
+            cnf.append([ls.pace_gt[m, 0]])
 
+    ## extra constraints that help the solver
 
-    # extra constraints that help the solver
+    # cards cannot be drawn too late
+    for m in range(instance.max_winning_moves):
+        for i in range(instance.num_dealt_cards, instance.deck_size - max(0, instance.max_winning_moves - instance.num_players - m)):
+            cnf.append([-ls.draw_ge[m, i]])
 
     # played every color/value combination (NOTE: redundant, but makes solving faster)
     # *[
@@ -519,12 +523,6 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
     #     for s in range(instance.num_suits)
     #     for r in range(1, 6)
     #     if r > game_state.stacks[s]
-    # ],
-
-    # # earliest possible draws of cards
-    # *[
-    #     ls.draw_on_or_after[min_turn(instance, i, None), i]
-    #     for i in range(instance.num_dealt_cards, instance.deck_size)
     # ],
 
     # pace constraints
@@ -561,6 +559,74 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
     # ls.play[51],
     # Not(ls.-clue[instance.max_winning_moves - 2]),
     # Not(ls.use[m, i]),
+    # cnf.append([ls.clue[0]])
+    # cnf.append([ls.clue[1]])
+    # cnf.append([ls.clue[2]])
+    # cnf.append([-ls.clue[3]])
+    # cnf.append([-ls.clue[4]])
+    # cnf.append([-ls.clue[5]])
+    # cnf.append([ls.clue[6]])
+    # cnf.append([-ls.clue[7]])
+    # cnf.append([-ls.clue[8]])
+    # cnf.append([ls.clue[9]])
+    # cnf.append([-ls.clue[10]])
+    # cnf.append([-ls.clue[11]])
+    # cnf.append([ls.clue[12]])
+    # cnf.append([ls.clue[13]])
+    # cnf.append([ls.clue[14]])
+    # cnf.append([-ls.clue[15]])
+    # cnf.append([-ls.clue[16]])
+    # cnf.append([-ls.clue[17]])
+    # cnf.append([-ls.clue[18]])
+    # cnf.append([-ls.clue[19]])
+    # cnf.append([ls.clue[20]])
+    # cnf.append([ls.clue[21]])
+    # cnf.append([-ls.clue[22]])
+    # cnf.append([-ls.clue[23]])
+    # cnf.append([-ls.clue[24]])
+    # cnf.append([-ls.clue[25]])
+    # cnf.append([ls.clue[26]])
+    # cnf.append([ls.clue[27]])
+    # cnf.append([-ls.clue[28]])
+    # cnf.append([-ls.clue[29]])
+    # cnf.append([ls.clue[30]])
+    # cnf.append([-ls.clue[31]])
+    # cnf.append([ls.clue[32]])
+    # cnf.append([-ls.clue[33]])
+    # cnf.append([ls.clue[34]])
+    # cnf.append([ls.clue[35]])
+    # cnf.append([-ls.clue[36]])
+    # cnf.append([ls.clue[37]])
+    # cnf.append([ls.clue[38]])
+    # cnf.append([-ls.clue[39]])
+    # cnf.append([-ls.clue[40]])
+    # cnf.append([-ls.clue[41]])
+
+    # cnf.append([-ls.play[3]])
+    # cnf.append([-ls.play[4]])
+    # cnf.append([ls.play[5]])
+    # cnf.append([-ls.play[7]])
+    # cnf.append([ls.play[8]])
+    # cnf.append([ls.play[10]])
+    # cnf.append([-ls.play[11]])
+    # cnf.append([-ls.play[15]])
+    # cnf.append([-ls.play[16]])
+    # cnf.append([ls.play[17]])
+    # cnf.append([ls.play[18]])
+    # cnf.append([-ls.play[19]])
+    # cnf.append([-ls.play[22]])
+    # cnf.append([ls.play[23]])
+    # cnf.append([-ls.play[24]])
+    # cnf.append([-ls.play[25]])
+    # cnf.append([ls.play[28]])
+    # cnf.append([ls.play[29]])
+    # cnf.append([ls.play[31]])
+    # cnf.append([ls.play[33]])
+    # cnf.append([ls.play[36]])
+    # cnf.append([ls.play[39]])
+    # cnf.append([ls.play[40]])
+    # cnf.append([ls.play[41]])
+    # cnf.append([ls.play[42]])
 
 
     # print(cnf.clauses)
@@ -589,6 +655,8 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
     else:
         # print("UNSAT")
         # print(solver.get_proof())
+        with open("proof.txt", "w") as f:
+            f.write(str(solver.get_proof()))
         return False, None
 
 def log_model(model, cur_game_state, ls: Literals):
@@ -598,21 +666,23 @@ def log_model(model, cur_game_state, ls: Literals):
         logger.debug(f"[print_model] Note: Omitting first {first_turn} turns, since they were fixed already.")
     for m in range(first_turn, cur_game_state.instance.max_winning_moves):
         logger.debug(f"=== move {m} ===")
-        logger.debug(f"clues: {len([i for i in range(cur_game_state.instance.max_clues) if model[ls.clues_gt[m, i]]])}")
+        logger.debug(f"clues: {len([i for i in range(cur_game_state.instance.max_clues) if model[ls.clues_gt[m, i]]])}, {[i for i in range(-1, cur_game_state.instance.max_clues + 1) if model[ls.clues_gt[m, i]]]}, {[i for i in range(-1, cur_game_state.instance.max_clues + 1) if not model[ls.clues_gt[m, i]]]}")
         logger.debug(f"strikes: {len([i for i in range(cur_game_state.instance.num_strikes) if model[ls.strikes_gt[m, i]]])}")
         logger.debug("draw: " + ", ".join(
             f"{i}: {deck[i]}" for i in range(cur_game_state.progress, cur_game_state.instance.deck_size) if
             model[ls.draw[m, i]]))
-        logger.debug("draw_ge: " + ", ".join(
-            f"{i}: {deck[i]}" for i in range(cur_game_state.progress, cur_game_state.instance.deck_size) if
-            model[ls.draw_ge[m, i]]))
+        # logger.debug("draw_ge: " + ", ".join(
+        #     f"{i}: {deck[i]}" for i in range(cur_game_state.progress, cur_game_state.instance.deck_size) if
+        #     model[ls.draw_ge[m, i]]))
         logger.debug("use: " + ", ".join(
             f"{i}: {deck[i]}" for i in range(cur_game_state.instance.deck_size) if
             model[ls.use[m, i]]))
         logger.debug(f"pace: {len([i for i in range(cur_game_state.instance.initial_pace) if model[ls.pace_gt[m, i]]])}")
-        for s in range(cur_game_state.instance.num_suits):
-            logger.debug(f"progress {constants.COLOR_INITIALS[s]}: " + "".join(
-                str(r) for r in range(1, 6) if model[ls.progress[m, s, r]]))
+        logger.debug(f"progress: " + "".join(
+                f"{len([r for r in range(1, 6) if model[ls.progress[m, s, r]]])}" for s in range(cur_game_state.instance.num_suits)))
+        # for s in range(cur_game_state.instance.num_suits):
+        #     logger.debug(f"progress {constants.COLOR_INITIALS[s]}: " + "".join(
+        #         str(r) for r in range(1, 6) if model[ls.progress[m, s, r]]))
         flags = ["clue", "draw_any", "play", "play5", "incr_clues", "strike", "extraturn", "dummyturn"]
         logger.debug(", ".join(f for f in flags if model[getattr(ls, f)[m]]))
 
