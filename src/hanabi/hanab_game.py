@@ -418,7 +418,6 @@ class GameState:
 
     # replaces the specified card (has to be in current player's hand) with the next card of the deck (if nonempty)
     def _replace(self, card_idx, allow_not_present: bool = False):
-        # print(f"player {self.turn}, hand {self.cur_hand}, draw {self.instance.deck[self.progress] if self.progress < self.instance.deck_size else 'nothing'}")
         try:
             idx_in_hand = next((i for (i, card) in enumerate(self.cur_hand) if card.deck_index == card_idx))
         except StopIteration:
