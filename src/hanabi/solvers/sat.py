@@ -111,8 +111,6 @@ class Literals():
             for i in range(-1, instance.initial_pace + 1)
         }
 
-
-
         # number of wasted clues up till turn m
         # self.wasted_clue = { -1: Int(0),
         #                      **{m: vpool.id(f"m{m}wasted_clue", INT) for m in range(instance.max_winning_moves + instance.num_suits)} }
@@ -135,17 +133,17 @@ def max_pace(instance: hanab_game.HanabiInstance, i : int) -> int:
     depth = i - instance.num_dealt_cards # 0-indexed
     return instance.initial_pace - max(0, depth + 1 - sum(max_scores(instance, i)))
 
-# def pace_constraints(instance: hanab_game.HanabiInstance, ls : Literals, first_turn):
-#     """constaints we can derive from pace considerations."""
-#     return \
-#         [ Implies(ls.draw[m, i], LE(ls.pace[m], Int(max_pace(instance, i))))
-#                 for i in range(instance.num_dealt_cards, instance.deck_size)
-#                 for m in range(first_turn, instance.max_winning_moves) ] + \
-#         [ Implies(ls.draw[m, i], ls.progress[m, c, max_scores(instance, i)[c] - max_pace(instance, i)])
-#                 for i in range(instance.num_dealt_cards, instance.deck_size)
-#                 for c in range(instance.num_suits)
-#                 for m in range(first_turn, instance.max_winning_moves)
-#                 if max_scores(instance, i)[c] > max_pace(instance, i)]
+def pace_constraints(instance: hanab_game.HanabiInstance, cnf : CNF, ls : Literals, first_turn):
+    """constaints we can derive from pace considerations."""
+    for m in range(first_turn, instance.max_winning_moves):
+        for i in range(instance.num_dealt_cards, instance.deck_size):
+            cnf.append([-ls.draw[m, i], -ls.pace_gt[m, max_pace(instance, i)]])
+
+    # for i in range(instance.num_dealt_cards, instance.deck_size):
+    #     for c in range(instance.num_suits):
+    #         if max_scores(instance, i)[c] > max_pace(instance, i):
+    #             for m in range(first_turn, instance.max_winning_moves):
+    #                 cnf.append([-ls.draw[m, i], ls.progress[m, c, max_scores(instance, i)[c] - max_pace(instance, i)]])
 
 def min_turn(instance: hanab_game.HanabiInstance, i : int, total_turns = None) -> int:
     """returns the first turn that card i can be drawn.
@@ -161,7 +159,7 @@ def min_turn(instance: hanab_game.HanabiInstance, i : int, total_turns = None) -
     clues_modifier = -2 if total_turns is None else max(-2, minimum_fiveplays - total_turns)
     return depth + max(0, depth + 1 - score + clues_modifier)
 
-def game_length_constraints(instance: hanab_game.HanabiInstance, ls : Literals, first_turn, k : int):
+def game_length_constraints(instance: hanab_game.HanabiInstance, cnf : CNF, ls : Literals, first_turn, k : int):
     """The constraints we can add to a game of exactly `maxlength - k` turns:
     at most `k + l` clues can be wasted.
     Here `l` is the minimum number of 5s that must be played in the last `#players + 1` plays (i.e. `l = 1 + n // 5`).
@@ -176,20 +174,17 @@ def game_length_constraints(instance: hanab_game.HanabiInstance, ls : Literals, 
 
     For `k = 0` we use an encoding that is significantly more efficient (the other one takes 50%-100% longer)
     """
-    # n = instance.num_players
-    # nturns = instance.max_winning_moves
-    # nsuits = instance.num_suits
-    # if k == 0:
-    #     return \
-    #     [ Or(ls.dummyturn[instance.max_winning_moves - 1], Not(ls.strike[m]))
-    #         for m in range(first_turn, instance.max_winning_moves)] + \
-    #     [ Or(ls.dummyturn[instance.max_winning_moves - 1], Not(ls.play5[m]),
-    #           NotEquals(ls.clues[m - 1], Int(instance.max_clues)))
-    #         for m in range(first_turn, instance.max_winning_moves)] + \
-    #     [ Or(ls.dummyturn[instance.max_winning_moves - 1], *combination)
-    #             for combination in itertools.combinations(
-    #                 [ls.progress[instance.max_winning_moves - instance.num_players - 3, s, 5] for s in range(instance.num_suits)],
-    #                 2 + instance.num_players // 5)]
+    n = instance.num_players
+    nturns = instance.max_winning_moves
+    nsuits = instance.num_suits
+    if k == 0:
+        for m in range(first_turn, nturns):
+            cnf.append([ls.dummyturn[nturns - 1], -ls.strike[m]])
+            cnf.append([ls.dummyturn[nturns - 1], -ls.play5[m], -ls.clues_gt[m - 1, instance.max_clues - 1]])
+        for combination in itertools.combinations(
+            [ls.progress[nturns - n - 3, s, 5] for s in range(nsuits)], 2 + n // 5):
+            cnf.append([ls.dummyturn[nturns - 1], *combination])
+    # TODO
     # else:
     #     return \
     #         [Implies(Or(ls.strike[m], And(ls.play5[m], Equals(ls.clues[m - 1], Int(instance.max_clues)))),Equals(ls.wasted_clue[m], ls.wasted_clue[m-1] + 1))
@@ -475,7 +470,7 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
 
         if m >= instance.draw_pile_size:
             # extra turns
-            # cnf.append([ls.extraturn[instance.max_winning_moves - instance.num_players]])
+            cnf.append([ls.extraturn[instance.max_winning_moves - instance.num_players]])
             cnf.append([-ls.extraturn[m - 1], ls.extraturn[m]])
             cnf.append([-ls.draw[m - 1, instance.deck_size - 1], ls.extraturn[m]])
             cnf.append([-ls.extraturn[m], ls.extraturn[m - 1], ls.draw[m - 1, instance.deck_size - 1]])
@@ -501,9 +496,8 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
         # (From this it follows that if you have pace `>= i + 1`, you have pace `>= i`)
 
         # pace is nonnegative
-        cnf.append([ls.pace_gt[m, 0], ls.extraturn[m]])
-        if m <= 34:
-            cnf.append([ls.pace_gt[m, 0]])
+        if m <= instance.max_winning_moves:
+            cnf.append([ls.pace_gt[m, -1]])
 
     ## extra constraints that help the solver
 
@@ -512,7 +506,21 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
         for i in range(instance.num_dealt_cards, instance.deck_size - max(0, instance.max_winning_moves - instance.num_players - m)):
             cnf.append([-ls.draw_ge[m, i]])
 
-    # played every color/value combination (NOTE: redundant, but makes solving faster)
+    # pace_constraints(instance, cnf, ls, first_turn)
+    game_length_constraints(instance, cnf, ls, first_turn, 0)
+    # game_length_constraints(instance, cnf, ls, first_turn, 1)
+
+    # earliest possible draws of cards
+    for i in range(instance.num_dealt_cards, instance.deck_size):
+        cnf.append([ls.draw_ge[min_turn(instance, i, None), i]])
+
+    # earliest possible draws of cards if (almost) max turns
+    for i in range(instance.num_dealt_cards, instance.deck_size):
+        for k in range(2): # number is arbitrary, but there is not information for k > 2
+            cnf.append([ls.dummyturn[instance.max_winning_moves - 1 - k], ls.draw_ge[min_turn(instance, i, k), i]])
+
+    # played every color/value combination
+    # (we need extra variables to encode this)
     # *[
     #     Or(
     #         And(ls.use[m, i], ls.play[m])
@@ -525,19 +533,6 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
     #     if r > game_state.stacks[s]
     # ],
 
-    # pace constraints
-    # *pace_constraints(instance, ls, first_turn),
-
-    # max-turns constraint: we can add extra conditions on a game at almost the maximum number of turns
-    # *game_length_constraints(instance, ls, first_turn, 0),
-    # *game_length_constraints(instance, ls, first_turn, 1),
-
-    # earliest possible draws of cards if (almost) max turns
-    # *[
-    #     Or(ls.dummyturn[instance.max_winning_moves - 1 - k], ls.draw_on_or_after[min_turn(instance, i, k), i])
-    #     for i in range(instance.num_dealt_cards, instance.deck_size)
-    #     for k in range(2)
-    # ],
 
     ## EXTRA CONDITION. This can be used to check whether
     ## the SAT-solver can disprove a particular statement.
@@ -560,84 +555,9 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
     # Not(ls.-clue[instance.max_winning_moves - 2]),
     # Not(ls.use[m, i]),
     # cnf.append([ls.clue[0]])
-    # cnf.append([ls.clue[1]])
-    # cnf.append([ls.clue[2]])
-    # cnf.append([-ls.clue[3]])
-    # cnf.append([-ls.clue[4]])
-    # cnf.append([-ls.clue[5]])
-    # cnf.append([ls.clue[6]])
-    # cnf.append([-ls.clue[7]])
-    # cnf.append([-ls.clue[8]])
-    # cnf.append([ls.clue[9]])
-    # cnf.append([-ls.clue[10]])
-    # cnf.append([-ls.clue[11]])
-    # cnf.append([ls.clue[12]])
-    # cnf.append([ls.clue[13]])
-    # cnf.append([ls.clue[14]])
-    # cnf.append([-ls.clue[15]])
-    # cnf.append([-ls.clue[16]])
-    # cnf.append([-ls.clue[17]])
-    # cnf.append([-ls.clue[18]])
-    # cnf.append([-ls.clue[19]])
-    # cnf.append([ls.clue[20]])
-    # cnf.append([ls.clue[21]])
-    # cnf.append([-ls.clue[22]])
-    # cnf.append([-ls.clue[23]])
-    # cnf.append([-ls.clue[24]])
-    # cnf.append([-ls.clue[25]])
-    # cnf.append([ls.clue[26]])
-    # cnf.append([ls.clue[27]])
-    # cnf.append([-ls.clue[28]])
-    # cnf.append([-ls.clue[29]])
-    # cnf.append([ls.clue[30]])
-    # cnf.append([-ls.clue[31]])
-    # cnf.append([ls.clue[32]])
-    # cnf.append([-ls.clue[33]])
-    # cnf.append([ls.clue[34]])
-    # cnf.append([ls.clue[35]])
-    # cnf.append([-ls.clue[36]])
-    # cnf.append([ls.clue[37]])
-    # cnf.append([ls.clue[38]])
-    # cnf.append([-ls.clue[39]])
-    # cnf.append([-ls.clue[40]])
-    # cnf.append([-ls.clue[41]])
-
-    # cnf.append([-ls.play[3]])
-    # cnf.append([-ls.play[4]])
-    # cnf.append([ls.play[5]])
-    # cnf.append([-ls.play[7]])
-    # cnf.append([ls.play[8]])
-    # cnf.append([ls.play[10]])
-    # cnf.append([-ls.play[11]])
-    # cnf.append([-ls.play[15]])
-    # cnf.append([-ls.play[16]])
-    # cnf.append([ls.play[17]])
-    # cnf.append([ls.play[18]])
-    # cnf.append([-ls.play[19]])
-    # cnf.append([-ls.play[22]])
-    # cnf.append([ls.play[23]])
-    # cnf.append([-ls.play[24]])
-    # cnf.append([-ls.play[25]])
-    # cnf.append([ls.play[28]])
-    # cnf.append([ls.play[29]])
-    # cnf.append([ls.play[31]])
-    # cnf.append([ls.play[33]])
-    # cnf.append([ls.play[36]])
-    # cnf.append([ls.play[39]])
-    # cnf.append([ls.play[40]])
-    # cnf.append([ls.play[41]])
-    # cnf.append([ls.play[42]])
 
 
-    # print(cnf.clauses)
-    cnf.to_file(f"hanabi_{instance.num_players}.cnf")
-    # units = set(l[0] for l in cnf.clauses if len(l) == 1)
-    # for u in units:
-    #     if -u in units:
-    #         print(f"Conflict: {vpool.obj(abs(u))}, {u}")
-    # for i, clause in enumerate(cnf.clauses):
-    #     if len(clause) == 0:
-    #         print(f"Empty clause at index {i}")
+    # cnf.to_file(f"hanabi_{instance.num_players}.cnf")
 
     solver = Glucose42(bootstrap_with=cnf, with_proof=True)
     # print("Starting solver...")
