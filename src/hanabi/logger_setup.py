@@ -11,7 +11,7 @@ class LoggerManager:
     def __init__(self, console_level: int = logging.INFO):
         self.logger = verboselogs.VerboseLogger("hanab-suite")
 
-        self.logger.setLevel(verboselogs.VERBOSE)
+        self.logger.setLevel(logging.DEBUG)
 
         self.file_formatter = logging.Formatter(
             '[%(asctime)s] [PID %(process)s] [%(levelname)7s]: %(message)s'

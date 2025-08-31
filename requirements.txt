@@ -1,6 +1,7 @@
 requests
 requests_cache
 pysmt
+pysat
 termcolor
 more_itertools
 psycopg2-binary

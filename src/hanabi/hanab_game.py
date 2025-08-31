@@ -160,6 +160,7 @@ class HanabiInstance:
         self.player_names = constants.PLAYER_NAMES[:self.num_players]
         self.deck_size = len(self.deck)
         self.max_clues = 16 if self.clue_starved else 8
+        self.clue_cost = 2 if self.clue_starved else 1
 
         self.initial_pace = self.deck_size - 5 * self.num_suits - self.num_players * (self.hand_size - 1)
 
@@ -417,6 +418,7 @@ class GameState:
 
     # replaces the specified card (has to be in current player's hand) with the next card of the deck (if nonempty)
     def _replace(self, card_idx, allow_not_present: bool = False):
+        # print(f"player {self.turn}, hand {self.cur_hand}, draw {self.instance.deck[self.progress] if self.progress < self.instance.deck_size else 'nothing'}")
         try:
             idx_in_hand = next((i for (i, card) in enumerate(self.cur_hand) if card.deck_index == card_idx))
         except StopIteration:
