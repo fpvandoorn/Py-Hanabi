@@ -626,7 +626,7 @@ def evaluate_model(model, cur_game_state: hanab_game.GameState, ls: Literals) ->
         if not model[ls.clue[m]]:
             card_idx = next(i for i in range(cur_game_state.instance.deck_size) if model[ls.use[m, i]])
             if model[ls.play[m]] or model[ls.strike[m]]:
-                print(m, model[ls.play[m]], model[ls.strike[m]], card_idx, cur_game_state.instance.deck[card_idx])
+                # print(m, model[ls.play[m]], model[ls.strike[m]], card_idx, cur_game_state.instance.deck[card_idx])
                 cur_game_state.play(card_idx)
             else:
                 cur_game_state.discard(card_idx)
