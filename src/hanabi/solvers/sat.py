@@ -111,9 +111,20 @@ class Literals():
             for i in range(-1, instance.initial_pace + 1)
         }
 
-        # number of wasted clues up till turn m
-        # self.wasted_clue = { -1: Int(0),
-        #                      **{m: vpool.id(f"m{m}wasted_clue", INT) for m in range(instance.max_winning_moves + instance.num_suits)} }
+        # for how many near-max turns we want to create constraints.
+        # E.g. if `NONMAX_TURNS = 2` we will create constraints for games that last
+        # the maximum number of turns, or 1 fewer.
+        self.NONMAX_TURNS = 2
+        # the number of wasted clues we want to track
+        self.MAX_WASTED_CLUES = self.NONMAX_TURNS + 1 + instance.num_players // 5
+        # wasted_clues_gt[m, i] means that you wasted more than i clues up to turn m.
+        # The extra `instance.num_suits` values for `m` indicate the stacks that are not 5
+        # when the final round starts.
+        self.wasted_clues_gt = {
+                (m, i): vpool.id(f"m{m}wasted_clues{i}")
+                for i in range(-1, self.MAX_WASTED_CLUES)
+                for m in range(-1, instance.max_winning_moves + instance.num_suits)
+        }
 
 def max_scores(instance: hanab_game.HanabiInstance, i : int):
     """returns the max scores achievable before card i is drawn"""
@@ -138,12 +149,11 @@ def pace_constraints(instance: hanab_game.HanabiInstance, cnf : CNF, ls : Litera
     for m in range(first_turn, instance.max_winning_moves):
         for i in range(instance.num_dealt_cards, instance.deck_size):
             cnf.append([-ls.draw[m, i], -ls.pace_gt[m, max_pace(instance, i)]])
-
-    # for i in range(instance.num_dealt_cards, instance.deck_size):
-    #     for c in range(instance.num_suits):
-    #         if max_scores(instance, i)[c] > max_pace(instance, i):
-    #             for m in range(first_turn, instance.max_winning_moves):
-    #                 cnf.append([-ls.draw[m, i], ls.progress[m, c, max_scores(instance, i)[c] - max_pace(instance, i)]])
+    for i in range(instance.num_dealt_cards, instance.deck_size):
+        for c in range(instance.num_suits):
+            if max_scores(instance, i)[c] > max_pace(instance, i):
+                for m in range(first_turn, instance.max_winning_moves):
+                    cnf.append([-ls.draw[m, i], ls.progress[m, c, max_scores(instance, i)[c] - max_pace(instance, i)]])
 
 def min_turn(instance: hanab_game.HanabiInstance, i : int, total_turns = None) -> int:
     """returns the first turn that card i can be drawn.
@@ -184,18 +194,18 @@ def game_length_constraints(instance: hanab_game.HanabiInstance, cnf : CNF, ls :
         for combination in itertools.combinations(
             [ls.progress[nturns - n - 3, s, 5] for s in range(nsuits)], 2 + n // 5):
             cnf.append([ls.dummyturn[nturns - 1], *combination])
-    # TODO
-    # else:
-    #     return \
-    #         [Implies(Or(ls.strike[m], And(ls.play5[m], Equals(ls.clues[m - 1], Int(instance.max_clues)))),Equals(ls.wasted_clue[m], ls.wasted_clue[m-1] + 1))
-    #         for m in range(first_turn, nturns)] + \
-    #         [Implies(Not(Or(ls.strike[m], And(ls.play5[m], Equals(ls.clues[m - 1], Int(instance.max_clues))))),Equals(ls.wasted_clue[m], ls.wasted_clue[m-1]))
-    #         for m in range(first_turn, nturns)] + \
-    #         [Implies(ls.progress[nturns - n - 3 - k, s, 5],Equals(ls.wasted_clue[nturns + s], ls.wasted_clue[nturns + s - 1]))
-    #         for s in range(nsuits)] + \
-    #         [Implies(Not(ls.progress[nturns - n - 3 - k, s, 5]),Equals(ls.wasted_clue[nturns + s], ls.wasted_clue[nturns + s - 1] + 1))
-    #         for s in range(nsuits)] + \
-    #         [Implies(And(Not(ls.dummyturn[nturns - 1 - k]), ls.dummyturn[nturns - k]), LE(ls.wasted_clue[nturns + nsuits - 1], Int(k + 1 + n // 5)))]
+    else:
+        for s in range(nsuits):
+            # if there are `nturn - k` turns and a 5 is played on the stack, we don't count this as a "wasted clue"
+            for i in range(-1, ls.MAX_WASTED_CLUES):
+                cnf.append([ls.dummyturn[nturns - 1 - k], -ls.dummyturn[nturns - k], -ls.progress[nturns - n - 3 - k, s, 5],
+                    ls.wasted_clues_gt[nturns + s - 1, i], -ls.wasted_clues_gt[nturns + s, i]])
+            # if there are `nturn - k` turns and a 5 is not played on the stack, we count this as a "wasted clue"
+            for i in range(ls.MAX_WASTED_CLUES):
+                cnf.append([ls.dummyturn[nturns - 1 - k], -ls.dummyturn[nturns - k], ls.progress[nturns - n - 3 - k, s, 5],
+                    -ls.wasted_clues_gt[nturns + s - 1, i - 1], ls.wasted_clues_gt[nturns + s, i]])
+        # if there are `nturn - k` turns we cannot have too many wasted clues
+        cnf.append([ls.dummyturn[nturns - 1 - k], -ls.dummyturn[nturns - k], -ls.wasted_clues_gt[nturns + nsuits - 1, k + 1 + n // 5]])
 
 def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, min_pace: Optional[int] = 0) -> Tuple[
     bool, Optional[hanab_game.GameState]]:
@@ -506,10 +516,6 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
         for i in range(instance.num_dealt_cards, instance.deck_size - max(0, instance.max_winning_moves - instance.num_players - m)):
             cnf.append([-ls.draw_ge[m, i]])
 
-    # pace_constraints(instance, cnf, ls, first_turn)
-    game_length_constraints(instance, cnf, ls, first_turn, 0)
-    # game_length_constraints(instance, cnf, ls, first_turn, 1)
-
     # earliest possible draws of cards
     for i in range(instance.num_dealt_cards, instance.deck_size):
         cnf.append([ls.draw_ge[min_turn(instance, i, None), i]])
@@ -518,6 +524,29 @@ def solve_sat(starting_state: hanab_game.GameState | hanab_game.HanabiInstance, 
     for i in range(instance.num_dealt_cards, instance.deck_size):
         for k in range(2): # number is arbitrary, but there is not information for k > 2
             cnf.append([ls.dummyturn[instance.max_winning_moves - 1 - k], ls.draw_ge[min_turn(instance, i, k), i]])
+
+    if ls.NONMAX_TURNS > 0:
+        # start with 0 wasted clues
+        cnf.append([ls.wasted_clues_gt[-1, -1]])
+        for i in range(ls.MAX_WASTED_CLUES):
+            cnf.append([-ls.wasted_clues_gt[-1, i]])
+        # wasted clues cannot decrease and increase by at most one
+        for m in range(instance.max_winning_moves + instance.num_suits):
+            for i in range(-1, ls.MAX_WASTED_CLUES):
+                cnf.append([-ls.wasted_clues_gt[m - 1, i], ls.wasted_clues_gt[m, i]])
+            for i in range(ls.MAX_WASTED_CLUES):
+                cnf.append([-ls.wasted_clues_gt[m, i], ls.wasted_clues_gt[m - 1, i - 1]])
+        # wasted clues during the game
+        for m in range(first_turn, instance.max_winning_moves):
+            for i in range(-1, ls.MAX_WASTED_CLUES):
+                cnf.append([ls.strike[m], ls.play5[m], ls.wasted_clues_gt[m - 1, i], -ls.wasted_clues_gt[m, i]])
+                cnf.append([ls.strike[m], -ls.clues_gt[m - 1, instance.max_clues - 1], ls.wasted_clues_gt[m - 1, i], -ls.wasted_clues_gt[m, i]])
+            for i in range(ls.MAX_WASTED_CLUES):
+                cnf.append([-ls.strike[m], -ls.wasted_clues_gt[m - 1, i - 1], ls.wasted_clues_gt[m, i]])
+                cnf.append([-ls.play5[m], ls.clues_gt[m - 1, instance.max_clues - 1], -ls.wasted_clues_gt[m - 1, i - 1], ls.wasted_clues_gt[m, i]])
+        # comparing wasted clues with number of turns in the game
+        for i in range(ls.NONMAX_TURNS):
+            game_length_constraints(instance, cnf, ls, first_turn, i)
 
     # played every color/value combination
     # (we need extra variables to encode this)
